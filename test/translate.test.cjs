@@ -82,3 +82,16 @@ test('fonte em inglês também rejeita intrusão de texto chinês na tradução 
 test('continuação de conversa após JSON completo é descartada sem aceitar JSON cortado',()=>{
  const {parseModelJSON}=require('../translate.cjs');assert.equal(parseModelJSON('{"translation":"Por que eles fazem bem"}<tool_call>\nuser\n{"translation":"1985-2006"}').translation,'Por que eles fazem bem');assert.throws(()=>parseModelJSON('{"translation":"texto cortado'),/incompleto/);assert.throws(()=>parseModelJSON('{"translation":"um"}{"translation":"outro"}'),/inesperado/);
 });
+
+test('schema evita aspas, barras de escape e controles que quebravam JSON do modelo',async()=>{
+ let pattern;const {translateWithOllama}=require('../translate.cjs');await translateWithOllama({id:1,time:'00:00:00,000 --> 00:00:02,000',text:'你好'},{model:'test',request:async(_url,options)=>{pattern=JSON.parse(options.body).format.properties.translation.pattern;return Response.json({response:JSON.stringify({translation:'Olá, «mundo».'})});}});
+ const allowed=new RegExp(pattern,'u');assert.equal(allowed.test('Ação, proporção e «desenho».'),true);for(const text of ['linha\nquebrada','aspas " internas','barra \\ interna','你好'])assert.equal(allowed.test(text),false);
+});
+
+test('checkpoint chinês é invalidado a partir do primeiro trecho incorreto',async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bili-prefix-test-'));t.after(()=>{const resolved=fs.realpathSync(dir);assert.ok(resolved.startsWith(fs.realpathSync(os.tmpdir())+path.sep));assert.ok(path.basename(resolved).startsWith('bili-prefix-test-'));fs.rmSync(resolved,{recursive:true,force:true});});
+ const srt=path.join(dir,'source.srt');fs.writeFileSync(srt,'1\n00:00:00,000 --> 00:00:02,000\n你好\n\n2\n00:00:03,000 --> 00:00:05,000\n画画\n');const source=parseSrt(fs.readFileSync(srt,'utf8')),checkpoint=path.join(dir,'output.progress.json');
+ fs.writeFileSync(checkpoint,JSON.stringify({fingerprint:require('crypto').createHash('sha256').update(JSON.stringify(source)).digest('hex'),translated:[{...source[0],text:'Olá.'},{...source[1],text:'画画'}]}));const calls=[];
+ const result=await translateCaptions({srt,language:'zh',model:'Whisper'},{outputBase:path.join(dir,'output'),generate:async(_p,b)=>{calls.push(b[0].id);return{translations:[{...b[0],text:'Desenhar.'}]};}});
+ assert.deepEqual(calls,[2]);assert.deepEqual(parseSrt(fs.readFileSync(result.srt,'utf8')).map(c=>c.text),['Olá.','Desenhar.']);
+});

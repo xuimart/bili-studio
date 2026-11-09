@@ -13,3 +13,7 @@ test('blocos recompõem os tempos globais acima de uma hora sem deslocar a fala'
 test('transcrição em repetição não é aceita como legenda concluída',()=>{
  assert.equal(speech.transcriptQuality(Array.from({length:12},()=>({text:'I think it is important in this world.'}))).suspicious,true);assert.equal(speech.transcriptQuality([{text:'Vamos desenhar.'},{text:'Olhe o plano.'}]).suspicious,false);
 });
+
+test('detecta repetição dentro de um único trecho antes de enviá-lo ao tradutor',()=>{
+ const result=speech.transcriptQuality([{text:'Texto normal'},{text:'啊'.repeat(134)},{text:'Continuação normal'}]);assert.equal(result.suspicious,true);assert.deepEqual(result.repetitiveCues,[2]);
+});

@@ -217,3 +217,21 @@ test('desktop usa seletor nativo injetado e informa o modo à interface',async t
  const response=await request('/api/choose-folder',{});assert.equal(response.status,200);assert.equal((await response.json()).path,'C:\\Videos');assert.equal(selected,'folder');
  assert.equal((await(await request('/api/state')).json()).desktop,true);
 });
+
+test('tradução interrompida preserva fonte e não publica chinês como legenda PT',async t=>{
+ const {app,request,dataDir}=await fixture(t,{transcribeMedia:async()=>({language:'zh',srt:path.join(dataDir,'source.srt')}),translateCaptions:async()=>{throw Error('JSON incompleto');}});
+ const video=path.join(dataDir,'video.mp4');fs.writeFileSync(video,'video');fs.writeFileSync(path.join(dataDir,'source.srt'),'1\n00:00:00,000 --> 00:00:02,000\n你好\n');
+ const item={id:'test-export',status:'done',output:video,media:{audioVerified:true},sourceIds:[]};app.state.exports.push(item);
+ const response=await request('/api/subtitles',{ids:[item.id],language:'zh',subtitleLanguage:'pt'});assert.equal(response.status,200);
+ const limit=Date.now()+2000;while(app.state.operation?.status==='running'&&Date.now()<limit)await new Promise(r=>setTimeout(r,10));
+ assert.equal(app.state.operation.status,'error');assert.equal(item.subtitles,undefined);assert.equal(item.subtitleSource.language,'zh');
+ const state=await(await request('/api/state')).json();assert.equal(state.exports[0].subtitleReady,false);assert.match(state.exports[0].subtitleNotice,/português falhou/);
+ assert.equal((await request('/api/subtitle?id='+item.id+'&format=srt')).status,409);assert.equal((await request('/api/media?id='+item.id)).status,200);
+});
+
+test('nova solicitação PT reaproveita legenda portuguesa pronta sem transcrever novamente',async t=>{
+ let calls=0;const {app,request,dataDir}=await fixture(t,{transcribeMedia:async()=>{calls++;throw Error('não deveria transcrever');},translateCaptions:async()=>{calls++;throw Error('não deveria traduzir');}});
+ const video=path.join(dataDir,'video.mp4'),srt=path.join(dataDir,'portugues.srt'),vtt=path.join(dataDir,'portugues.vtt');fs.writeFileSync(video,'video');fs.writeFileSync(srt,'1\n00:00:00,000 --> 00:00:02,000\nOlá.\n');fs.writeFileSync(vtt,'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nOlá.\n');
+ const item={id:'ready-export',status:'done',output:video,sourceIds:[],subtitles:{language:'pt',sourceLanguage:'zh',srt,vtt,original:{language:'zh',detectionVersion:2}}};app.state.exports.push(item);
+ assert.equal((await request('/api/subtitles',{ids:[item.id],language:'auto',subtitleLanguage:'pt'})).status,200);const limit=Date.now()+1000;while(app.state.operation?.status==='running'&&Date.now()<limit)await new Promise(r=>setTimeout(r,10));assert.equal(calls,0);assert.equal(app.state.operation.status,'done');assert.match(await(await request('/api/subtitle?id='+item.id+'&format=srt')).text(),/Olá/);
+});

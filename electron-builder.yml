@@ -18,6 +18,7 @@ files:
   - whisper.cjs
   - speech.cjs
   - translate.cjs
+  - subtitle-delivery.cjs
   - ollama-transport.cjs
   - captions.cjs
   - caption-compact.cjs

@@ -11,6 +11,7 @@ const { translateCaptions } = require('./translate.cjs');
 const { loadState, createStateStore } = require('./state-store.cjs');
 const { findEngine, MODEL } = require('./whisper.cjs');
 const { prefetch } = require('./fast-download.cjs');
+const {subtitleDelivery,applySubtitleRepairs}=require('./subtitle-delivery.cjs');
 const {APP_ROOT:ROOT,DATA_DIR,BIN_DIR,DOWNLOAD_DIR}=require('./runtime-paths.cjs');
 const DEFAULT_URL = '';
 function launch(executable, args) { return spawn(executable, args, { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] }); }
@@ -68,9 +69,12 @@ function createApp(options = {}) {
   const ffmpeg = fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) ? BIN_DIR : 'ffmpeg';
   const store = createStateStore(stateFile, () => state, { onWarning: warning => { state.persistenceWarning = warning; } });
   const persist = store.persist;
+  if(applySubtitleRepairs(state,dataDir))persist(true);
   function log(message, type = 'info') { state.logs.push({ time: new Date().toISOString(), type, message: String(message).slice(0, 1300) }); state.logs = state.logs.slice(-100); persist(); }
   function publicState() {
-    return { ...state, desktop:!!options.choosePath, tools: { downloader: fs.existsSync(ytdlp), ffmpeg: fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) || ffmpeg === 'ffmpeg', whisper: !!findEngine() && fs.existsSync(MODEL) }, summary: { total: state.jobs.length, done: state.jobs.filter(j => j.status === 'done').length, failed: state.jobs.filter(j => j.status === 'error').length } };
+    if(applySubtitleRepairs(state,dataDir))persist(true);
+    const project=item=>{const delivery=subtitleDelivery(item,state);return {...item,subtitleReady:delivery.ready,subtitleNotice:delivery.notice,subtitleStatus:delivery.status};};
+    return { ...state, jobs:state.jobs.map(project),exports:state.exports.map(project),desktop:!!options.choosePath, tools: { downloader: fs.existsSync(ytdlp), ffmpeg: fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) || ffmpeg === 'ffmpeg', whisper: !!findEngine() && fs.existsSync(MODEL) }, summary: { total: state.jobs.length, done: state.jobs.filter(j => j.status === 'done').length, failed: state.jobs.filter(j => j.status === 'error').length } };
   }
   async function inspectJob(job) {
     job.media = await (options.inspectMedia || media.inspect)(job.output);
@@ -113,6 +117,7 @@ function createApp(options = {}) {
     const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:from+(to-from)*(p.progress||0)/100});
     persist(true);
     void (async () => {
+      let currentCaption=null;
       try {
         let captionItems = items;
         if (hasMerge) {
@@ -125,9 +130,14 @@ function createApp(options = {}) {
         }
         if (hasCaptions) {
           for (let index = 0; index < captionItems.length; index++) {
-            const item = captionItems[index]; update({ currentId: item.id, currentTitle: item.title, completed: index });
-            const existing = item.subtitles?.original || item.subtitles;
+            const item = captionItems[index];currentCaption=item;item.subtitleDelivery={requestedLanguage:processing.subtitleLanguage||'original',status:'processing'};update({ currentId: item.id, currentTitle: item.title, completed: index });
+            const previous=item.subtitles,sourceLanguage=previous?.sourceLanguage||previous?.original?.language||previous?.language;
+            const sameLanguage=language==='auto'?(previous?.original?.detectionVersion>=2||previous?.detectionVersion>=2):sourceLanguage===language;
+            const reusePortuguese=processing.subtitleLanguage==='pt'&&previous?.language==='pt'&&sameLanguage&&['srt','vtt'].every(key=>previous[key]&&fs.existsSync(previous[key]));
+            if(!reusePortuguese){
+            const existing = item.subtitleSource || item.subtitles?.original || item.subtitles;
             let reusable = existing?.srt && fs.existsSync(existing.srt) && (language==='auto'||existing.language===language);
+            if(reusable&&!options.transcribeMedia&&require('./speech.cjs').transcriptQuality(require('./translate.cjs').parseSrt(fs.readFileSync(existing.srt,'utf8'))).suspicious)reusable=false;
             if(reusable && language==='auto' && !existing.detectionVersion && !options.transcribeMedia){
               const detection=await media.detectSpeechLanguage(item,{signal,update:stageUpdate('transcribe',captionStart,captionEnd)});
               const quality=require('./speech.cjs').transcriptQuality(require('./translate.cjs').parseSrt(fs.readFileSync(existing.srt,'utf8')));
@@ -135,23 +145,25 @@ function createApp(options = {}) {
               if(reusable){existing.languageDetection=detection;existing.detectionVersion=2;}
             }
             if(!reusable && item.subtitles){(item.subtitleHistory ||= []).push(item.subtitles);persist(true);}
-            item.subtitles = reusable ? existing : await (options.transcribeMedia || media.transcribe)(item, language, { signal, update:stageUpdate('transcribe',captionStart,captionEnd) });
-            if (processing.subtitleLanguage === 'pt' && item.subtitles.language !== 'pt') {
-              const original = item.subtitles; persist(true);
-              item.subtitles = await (options.translateCaptions || translateCaptions)(original, { signal, update:stageUpdate('translate',captionEnd,100) });
+            const original = reusable ? existing : await (options.transcribeMedia || media.transcribe)(item, language, { signal, update:stageUpdate('transcribe',captionStart,captionEnd) });
+            item.subtitleSource=original;persist(true);
+            if (processing.subtitleLanguage === 'pt' && original.language !== 'pt') {
+              item.subtitles = await (options.translateCaptions || translateCaptions)(original, { signal,outputBase:item.output.replace(/\.mp4$/i,'')+'.pt-BR',update:stageUpdate('translate',captionEnd,100) });
+            }else item.subtitles=original;
             }
-            if(item.subtitles.language==='pt' && !options.transcribeMedia){
+            if(item.subtitles?.srt && !options.transcribeMedia){
               const alias=item.output.replace(/\.mp4$/i,'')+'.srt';
               if(fs.existsSync(alias)&&!fs.readFileSync(alias).equals(fs.readFileSync(item.subtitles.srt)))fs.copyFileSync(alias,alias+'.anterior-'+Date.now());
               fs.copyFileSync(item.subtitles.srt,alias);item.subtitles.playbackSrt=alias;
             }
-            operation.completed = index + 1; persist(true);
+            item.subtitleDelivery.status='done';operation.completed = index + 1; persist(true);
           }
         }
         update({ status: 'done', phase: type === 'workflow' ? 'Tudo pronto. Os arquivos estão na pasta escolhida.' : type === 'merge' ? 'Vídeo unido pronto, com áudio e capítulos.' : 'Legendas prontas para assistir e baixar.', progress: 100, completed: items.length, completedAt: new Date().toISOString() });
         if (type === 'workflow') state.workflow.status = 'done';
         log(operation.phase, 'success');
       } catch (error) {
+        if(currentCaption)currentCaption.subtitleDelivery={...currentCaption.subtitleDelivery,status:signal.aborted?'cancelled':'error',error:error.message};
         if (type === 'workflow') state.workflow.status = signal.aborted ? 'cancelled' : 'error';
         update({ status: signal.aborted ? 'cancelled' : 'error', phase: signal.aborted ? 'Operação cancelada. Os vídeos originais foram preservados.' : error.message, error: signal.aborted ? '' : error.message });
         log(operation.phase, signal.aborted ? 'info' : 'error');
@@ -384,7 +396,7 @@ function createApp(options = {}) {
       let file, mime;
       if (url.pathname === '/api/media') { if (!item.media?.audioVerified) return send(409, { error: 'O áudio deste vídeo ainda está sendo verificado.' }); file = item.output; mime = 'video/mp4'; }
       if (url.pathname === '/api/thumbnail') { file = item.thumbnail; mime = 'image/jpeg'; }
-      if (url.pathname === '/api/subtitle') { const format = url.searchParams.get('format') || 'vtt'; if (!['vtt', 'srt', 'txt'].includes(format)) return send(400, { error: 'Formato inválido.' }); file = item.subtitles?.[format]; mime = format === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8'; }
+      if (url.pathname === '/api/subtitle') { const delivery=subtitleDelivery(item,state);if(!delivery.ready)return send(409,{error:delivery.notice});const format = url.searchParams.get('format') || 'vtt'; if (!['vtt', 'srt', 'txt'].includes(format)) return send(400, { error: 'Formato inválido.' }); file = item.subtitles?.[format]; mime = format === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8'; }
       if (!file || !fs.existsSync(file)) return send(404, { error: 'Arquivo indisponível.' });
       return media.streamFile(req, res, file, mime, url.searchParams.get('download') === '1');
     }
@@ -438,7 +450,8 @@ function createApp(options = {}) {
           const items = selectedFinished(body.ids); if (items.length < 2) throw new Error('Selecione pelo menos dois episódios para juntar.'); startOperation('merge', items);
         } else if (url.pathname === '/api/subtitles') {
           const language = body.language || 'auto'; if (!['auto', 'pt', 'en', 'zh', 'es', 'fr', 'ja', 'de', 'it', 'ko'].includes(language)) throw new Error('Idioma não suportado.');
-          startOperation('subtitles', selectedFinished(body.ids, true), language);
+          const target=body.subtitleLanguage||'original';if(!['pt','original'].includes(target))throw Error('Idioma da legenda não suportado.');
+          startOperation('subtitles', selectedFinished(body.ids, true), language,{subtitleLanguage:target});
         } else if (url.pathname === '/api/cancel-operation') {
           state.queueEnabled=false;operationController?.abort();
         } else if (url.pathname === '/api/pause' || url.pathname === '/api/shutdown') {

@@ -20,6 +20,11 @@ app.whenReady().then(async()=>{
  let initial;const deadline=Date.now()+15000;do{initial=await read();if(initial.ready)break;await new Promise(r=>setTimeout(r,100));}while(Date.now()<deadline);
  assert.equal(initial.ready,true);assert.equal(initial.queueHidden,true);assert.equal(initial.historyOpen,false);assert.equal(initial.historyRows,9);assert.equal(initial.activeRows,0);assert.equal(initial.bannerHidden,true);assert.equal(initial.progressHidden,true);assert.equal(initial.selected,'15 selecionados');assert.equal(initial.workspaceBeforeQueue,true);assert.ok(initial.workspaceTop-initial.sourceBottom<40);
  fs.writeFileSync(path.join(profile,'history-collapsed.png'),(await win.webContents.capturePage()).toPNG());
+ state.exports[0].subtitles={language:'zh',srt:path.join(profile,'original.srt'),vtt:path.join(profile,'original.vtt')};state.exports[0].subtitleDelivery={requestedLanguage:'pt',status:'error'};
+ await win.webContents.executeJavaScript('poll()');await win.webContents.executeJavaScript('preview(state.exports[0])');
+ const captionGuard=await win.webContents.executeJavaScript('({tracks:document.querySelector("#player").querySelectorAll("track").length,downloadHidden:document.querySelector("#download-srt").hidden,notice:document.querySelector("#preview-caption-status").textContent})');
+ assert.equal(captionGuard.tracks,0);assert.equal(captionGuard.downloadHidden,true);assert.match(captionGuard.notice,/português falhou/);await win.webContents.executeJavaScript('document.querySelector("#preview-dialog").close()');
+
  await win.webContents.executeJavaScript(`document.querySelector('#download-history').open=true;`);
  await win.webContents.executeJavaScript('poll()');
  assert.equal((await read()).historyOpen,true,'Polling não pode recolher um histórico aberto pelo usuário');
@@ -31,7 +36,7 @@ app.whenReady().then(async()=>{
  state.linkQueue[0].status='running';state.queueEnabled=true;
  await win.webContents.executeJavaScript('poll()');const active=await read();assert.equal(active.activeRows,2);assert.equal(active.historyRows,7);assert.equal(active.queueHidden,false);
  fs.writeFileSync(path.join(profile,'active-queue.png'),(await win.webContents.capturePage()).toPNG());
- const report={version:require('../package.json').version,completedHistory:initial,bulk,pending,active,checks:'Concluídos recolhidos; seleção imediatamente após o link; pendentes/erros/ativo visíveis; histórico permanece aberto durante polling; atalhos de vários links funcionam.'};
+ const report={captionGuard,version:require('../package.json').version,completedHistory:initial,bulk,pending,active,checks:'Concluídos recolhidos; seleção imediatamente após o link; pendentes/erros/ativo visíveis; histórico permanece aberto durante polling; atalhos de vários links funcionam.'};
  fs.writeFileSync(path.join(profile,'layout-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));console.log('Evidência: '+profile);
  state.queueEnabled=false;backend.server.close();app.exit(0);
 }).catch(e=>{console.error(e.stack);backend?.server.close();app.exit(1);});

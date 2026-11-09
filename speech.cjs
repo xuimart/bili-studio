@@ -39,7 +39,7 @@ function parseChunk(text,offset,duration){
  if(!text.trim())return [];
  return text.replace(/^\uFEFF/,'').trim().split(/\r?\n\s*\r?\n/).map(block=>{const lines=block.split(/\r?\n/),at=lines.findIndex(l=>l.includes(' --> '));if(at<0)throw Error('Bloco de legenda inválido.');const [a,b]=lines[at].split(' --> '),start=seconds(a),end=seconds(b),content=lines.slice(at+1).join(' ').trim();if(!content||end<start||start>duration+1)throw Error('Tempos inválidos na transcrição.');return {start:offset+start,end:offset+Math.min(end,duration),text:content};}).filter(c=>c.end>c.start);
 }
-function transcriptQuality(cues){let run=0,maxRun=0,previous='';for(const c of cues){const v=c.text.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');run=v.length>12&&v===previous?run+1:1;previous=v;maxRun=Math.max(maxRun,run);}return {maxRepeatedRun:maxRun,suspicious:maxRun>=12};}
+function transcriptQuality(cues){let run=0,maxRun=0,previous='';for(const c of cues){const v=c.text.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');run=v.length>12&&v===previous?run+1:1;previous=v;maxRun=Math.max(maxRun,run);}const repetitiveCues=cues.map((c,i)=>/([\p{L}])\1{11,}/u.test(c.text)?i+1:null).filter(Boolean);return {maxRepeatedRun:maxRun,repetitiveCues,suspicious:maxRun>=12||repetitiveCues.length>0};}
 async function transcribe(item,language,{signal,update=()=>{}}={}){
  await media.inspect(item.output,{signal,volume:false});const engine=await ensureWhisper(update,signal),info=await media.probe(item.output,signal);
  const work=path.join(DATA_DIR,'work','speech-'+sourceKey(item,language));fs.mkdirSync(work,{recursive:true});
@@ -52,13 +52,13 @@ async function transcribe(item,language,{signal,update=()=>{}}={}){
  const spokenName=({zh:'mandarim',en:'inglês',pt:'português',es:'espanhol',fr:'francês',ja:'japonês',de:'alemão',it:'italiano',ko:'coreano'})[selected]||selected;
  for(let i=0;i<total;i++){
   signal?.throwIfAborted();const offset=i*chunkSeconds,duration=Math.min(chunkSeconds,info.duration-offset),cache=path.join(work,'chunk-'+i+'.json');let chunk;
-  try{const saved=JSON.parse(fs.readFileSync(cache,'utf8'));if(saved.language===selected&&saved.offset===offset&&saved.duration===duration&&Array.isArray(saved.cues))chunk=saved.cues;}catch{}
+  try{const saved=JSON.parse(fs.readFileSync(cache,'utf8'));if(saved.language===selected&&saved.offset===offset&&saved.duration===duration&&Array.isArray(saved.cues)&&!transcriptQuality(saved.cues).suspicious)chunk=saved.cues;}catch{}
   if(!chunk){
    const wav=path.join(work,'chunk-'+i+'.wav'),prefix=path.join(work,'chunk-'+i);
    update({phase:'Transcrevendo '+spokenName+' · bloco '+(i+1)+' de '+total,progress:i/total*97});
    await media.execute(FFMPEG,['-v','error','-ss',String(offset),'-i',item.output,'-t',String(duration),'-map','0:a:0','-ar','16000','-ac','1','-y',wav],{signal});
    for(let attempt=0;attempt<2;attempt++){
-    const args=['-m',engine.model,'-f',wav,'-l',selected,'-t',String(Math.max(2,Math.min(8,os.availableParallelism()-2))),'-mc','0','-tp',String(attempt*.2),'-osrt','-of',prefix,'-pp','-ml','60','-sow'];
+    const args=['-m',engine.model,'-f',wav,'-l',selected,'-t',String(Math.max(2,Math.min(8,os.availableParallelism()-2))),'-mc','0','-tp',String(attempt*.2),'-osrt','-of',prefix,'-pp','-ml',attempt?'18':'60',...(attempt?[]:['-sow'])];
     await whisper(engine,args,{signal,onLine:line=>{const m=line.match(/progress\s*=\s*(\d+)%/);if(m)update({phase:'Transcrevendo '+spokenName+' · bloco '+(i+1)+' de '+total,progress:(i+Number(m[1])/100)/total*97});}});
     chunk=parseChunk(fs.readFileSync(prefix+'.srt','utf8'),offset,duration);if(!transcriptQuality(chunk).suspicious)break;
     if(attempt===1)throw Error('Transcrição repetitiva no bloco '+(i+1)+'. Os blocos anteriores foram salvos para retomada.');
@@ -69,7 +69,8 @@ async function transcribe(item,language,{signal,update=()=>{}}={}){
   cues.push(...chunk);update({phase:'Transcrição '+spokenName+' · '+(i+1)+' de '+total+' blocos salvos',progress:(i+1)/total*97});
  }
  if(!cues.length)throw Error('O Whisper não encontrou fala suficiente para gerar legendas.');
- const outputBase=item.output.replace(/\.mp4$/i,'')+'.whisper-'+Date.now(),outputs={};
+ const originalDir=path.join(path.dirname(item.output),'Legendas originais');fs.mkdirSync(originalDir,{recursive:true});
+ const outputBase=path.join(originalDir,path.basename(item.output).replace(/\.mp4$/i,'')+'.whisper-'+Date.now()),outputs={};
  const srt=cues.map((c,i)=>(i+1)+'\n'+timestamp(c.start)+' --> '+timestamp(c.end)+'\n'+c.text).join('\n\n')+'\n';
  const vtt='WEBVTT\n\n'+cues.map(c=>timestamp(c.start).replace(',','.')+' --> '+timestamp(c.end).replace(',','.')+'\n'+c.text.replaceAll('&','&amp;').replaceAll('<','&lt;')).join('\n\n')+'\n';
  for(const [ext,text]of Object.entries({srt,vtt,txt:cues.map(c=>c.text).join('\n')})){outputs[ext]=outputBase+'.'+ext;fs.writeFileSync(outputs[ext],text,{flag:'wx'});}

@@ -1,5 +1,16 @@
 # Histórico
 
+## 4.0.3 — 2026-11-09
+
+- Tradução interrompida não entrega a transcrição original em mandarim como se a legenda PT estivesse pronta. Vídeo e legenda têm estados separados.
+- Preserva a fonte e qualquer legenda portuguesa anterior até concluir a nova tradução. O player mostra o erro ou a pendência e não ativa a faixa errada.
+- Restringe caracteres que quebravam o JSON gerado, valida checkpoints e retoma o prefixo válido sem repetir todo o trabalho.
+- Detecta repetições dentro de um único trecho do Whisper e tenta outra segmentação antes de enviar o texto ao tradutor.
+- Separa transcrições originais e alinhamentos completos dos SRT de exibição, reduzindo escolhas automáticas erradas dos players externos.
+- Inclui recuperação local validada de tradução sem baixar ou unir os vídeos novamente; reaproveita legendas PT prontas.
+- Corrige o idioma de destino na API de geração de legendas.
+- 113 testes passaram; o teste de interface também confirma que uma tradução falha não cria faixa chinesa nem oferece download da legenda incorreta.
+
 ## 4.0.2 — 2026-11-09
 
 - A seleção dos vídeos e as opções passam a aparecer imediatamente após o link e a pasta de destino.
