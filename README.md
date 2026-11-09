@@ -6,7 +6,7 @@ Aplicativo Windows para baixar bibliotecas do **Bilibili.com**, escolher episód
 
 ## Instalar e usar
 
-1. Baixe `Bili-Studio-Setup-4.0.0-x64.exe` na página de releases e execute o instalador.
+1. Baixe o arquivo `Bili-Studio-Setup-<versão>-x64.exe` na página de releases e execute o instalador.
 2. Abra **Bili Studio** pelo menu Iniciar ou pelo atalho da área de trabalho. O aplicativo tem sua própria janela; não abre Edge ou outro navegador para funcionar.
 3. Na primeira abertura, aguarde a preparação de FFmpeg e yt-dlp. Os downloads vêm dos distribuidores oficiais e são verificados por SHA-256.
 4. Cole o link, escolha a pasta e marque os episódios. Ative legenda e/ou união conforme o resultado desejado. Você pode adicionar vários links à fila.

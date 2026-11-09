@@ -24,8 +24,12 @@ function normalizeUrl(value) {
   if(/^\/(?:medialist\/(?:play\/\w+|detail\/ml\d+)|list\/\w+)\/?$/.test(url.pathname)){
     const clean=new URL('https://www.bilibili.com'+url.pathname);for(const k of ['business','business_id','sid','oid','type'])if(url.searchParams.has(k))clean.searchParams.set(k,url.searchParams.get(k));return clean.href;
   }
-  // Localized Bilibili pages (e.g. /pt/video/) identify the same playlist.
-  const id = url.pathname.match(/^\/(?:[a-z]{2}(?:-[a-zA-Z]{2})?\/)?video\/(BV[0-9A-Za-z]{10}|av\d+)\/?$/)?.[1];
+  // BCP 47 includes script subtags (zh-Hans), regions (pt-BR, es-419)
+  // and their combinations. They all identify the same original video.
+  const match = url.pathname.match(/^\/(?:([^/]+)\/)?video\/(BV[0-9A-Za-z]{10}|av\d+)\/?$/);
+  let validLocale = true;
+  if (match?.[1]) { try { Intl.getCanonicalLocales(match[1]); } catch { validLocale = false; } }
+  const id = validLocale ? match?.[2] : null;
   if (!id) throw new Error('Use o endereço de um vídeo dentro da playlist: bilibili.com/video/BV…');
   return 'https://www.bilibili.com/video/' + id + '/';
 }

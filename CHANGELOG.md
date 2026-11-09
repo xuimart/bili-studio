@@ -1,5 +1,12 @@
 # Histórico
 
+## 4.0.1 — 2026-11-09
+
+- Corrige a rejeição de links localizados com nome de escrita, como `/zh-Hans/video/` e `/zh-Hant/video/`.
+- Valida o prefixo com o suporte BCP 47 do runtime, incluindo combinações de escrita/região e regiões numéricas, antes de consultar o vídeo canônico.
+- Mantém a validação de host, HTTPS, identificador e estrutura do caminho. A análise continua trazendo todas as partes da biblioteca.
+- 101 testes passaram, incluindo regressão com o endereço informado. Consulta real reconheceu seus 15 episódios; nenhum download foi iniciado por esse teste.
+
 ## 4.0.0 — 2026-11-09
 
 Primeira distribuição pública instalável do Bili Studio.
