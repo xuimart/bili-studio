@@ -1,0 +1,39 @@
+name: Publicar instalador
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Conferir tag e versão
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Use uma tag que corresponda à versão do package.json.' }
+      - run: npm ci
+      - run: npm run setup
+      - run: npm test
+      - run: npm run test:formats
+      - run: npm run dist
+      - run: npm run test:release
+      - run: npm run test:desktop -- "release/win-unpacked/Bili Studio.exe"
+      - name: Publicar arquivos validados
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $notes = "docs/RELEASE-$version.md"
+          if (-not (Test-Path -LiteralPath $notes)) { throw "Notas ausentes: $notes" }
+          gh release create "v$version" --verify-tag --title "Bili Studio $version" --notes-file $notes "release/Bili-Studio-Setup-$version-x64.exe" "release/Bili-Studio-Setup-$version-x64.exe.blockmap" "release/latest.yml" "release/SHA256SUMS.txt"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,0 +1,23 @@
+Bili Studio 4.0.0
+
+Programa Windows com janela propria, instalador e atualizacoes pelo GitHub.
+
+Manual: docs/MANUAL.md
+Compatibilidade e limites: docs/COMPATIBILIDADE.md
+Desenvolvimento: docs/DESENVOLVIMENTO.md
+Publicacao de atualizacoes: docs/RELEASES.md
+Arquitetura: docs/ARQUITETURA.md
+
+Instalador publico: https://github.com/xuimart/bili-studio/releases/latest
+
+A versao instalada abre pelo atalho Bili Studio. A janela antiga do Edge e os
+scripts launch.ps1/C# eram da versao 3.8 e nao fazem parte da distribuicao nova.
+
+Seus videos ficam na pasta escolhida. O perfil da versao nova fica em
+%LOCALAPPDATA%\Bili Studio, preservado por atualizacoes e desinstalacao.
+
+Na primeira abertura, ferramentas oficiais sao baixadas e verificadas.
+A primeira legenda/traducao exige modelos adicionais e varios GB livres.
+
+Importacao: Arquivo > Importar biblioteca anterior > antigo data/state.json.
+Nao apague a pasta antiga antes de conferir os caminhos dos seus videos.

@@ -1,0 +1,54 @@
+appId: br.com.xuimart.bilistudio
+productName: Bili Studio
+artifactName: Bili-Studio-Setup-${version}-${arch}.${ext}
+asar: true
+electronDist: node_modules/electron/dist
+directories:
+  output: release
+  buildResources: desktop
+files:
+  - package.json
+  - server.cjs
+  - runtime-paths.cjs
+  - runtime-tools.cjs
+  - state-store.cjs
+  - library.cjs
+  - media.cjs
+  - fast-download.cjs
+  - whisper.cjs
+  - speech.cjs
+  - translate.cjs
+  - ollama-transport.cjs
+  - captions.cjs
+  - caption-compact.cjs
+  - public/**
+  - desktop/main.cjs
+  - desktop/migration.cjs
+  - desktop/update-policy.cjs
+  - desktop/icon.png
+  - LICENSE
+  - THIRD-PARTY-NOTICES.md
+  - '!**/data/**'
+  - '!**/downloads/**'
+  - '!**/bin/**'
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: desktop/icon.ico
+  verifyUpdateCodeSignature: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Bili Studio
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+publish:
+  provider: github
+  owner: xuimart
+  repo: bili-studio
+  releaseType: release
