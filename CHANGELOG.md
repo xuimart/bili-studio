@@ -1,5 +1,14 @@
 # Histórico
 
+## 4.0.2 — 2026-11-09
+
+- A seleção dos vídeos e as opções passam a aparecer imediatamente após o link e a pasta de destino.
+- Playlists concluídas e seus arquivos ficam em um histórico recolhido, sem ocupar a fila de trabalhos atuais.
+- Remove o painel grande de “fila concluída” e o acompanhamento antigo quando não há trabalho em andamento.
+- Mantém pendentes, pausados e erros na fila; o atalho “Colar vários links” continua acessível junto ao campo de link.
+- Evita duplicar o mesmo resultado unido no histórico. Nenhum arquivo ou registro salvo é apagado por essa organização visual.
+- Teste com renderer real confirmou seleção com 15 vídeos, nove concluídos recolhidos, abertura do histórico preservada durante atualizações e visibilidade de pendentes/erros/execução.
+
 ## 4.0.1 — 2026-11-09
 
 - Corrige a rejeição de links localizados com nome de escrita, como `/zh-Hans/video/` e `/zh-Hant/video/`.

@@ -22,7 +22,7 @@ function selection(){
  $('queue-add-links').disabled=lock||!$('queue-urls').value.trim();
  $('queue-start').disabled=lock||!(state?.linkQueue||[]).some(q=>['pending','paused'].includes(q.status));
  $('queue-start').hidden=!!state?.queueEnabled; $('queue-pause').hidden=!state?.queueEnabled;$('queue-pause').disabled=action||disconnected;
- for(const b of $('link-queue-items').querySelectorAll('button'))b.disabled=action||disconnected;
+ for(const b of document.querySelectorAll('#link-queue-items button, #link-history-items button'))b.disabled=action||disconnected;
  const allDone=count&&entries.filter(e=>selected.has(e.id)).every(e=>job(e.id)?.status==='done');
  setText('start',state?.queueEnabled?'Fila em andamento':state?.busy?'Baixando…':state?.operation?.status==='running'?'Processando…':state?.auditing?'Verificando arquivos…':queued?'Iniciar fila de '+queued+' links':allDone&&(p.merge||p.subtitles)?'Processar esta seleção ('+count+' vídeos)':'Baixar esta seleção ('+count+' vídeos)');
  setText('queue-start',state?.queueEnabled?'Fila em andamento':'Iniciar fila de '+queued+' links');
@@ -36,6 +36,8 @@ function preview(item){
  setText('preview-title',item.title);$('download-current').href=player.src+'&download=1';$('download-srt').hidden=!item.subtitles;$('download-srt').href='/api/subtitle?id='+encodeURIComponent(item.id)+'&format=srt&download=1';player.load();$('preview-dialog').showModal();
 }
 function render(next,first=false){
+ const finished=state&&((state.operation?.status==='running'&&next.operation?.status==='done')||(state.workflow?.status==='downloading'&&next.workflow?.status==='done')||(state.linkQueue||[]).some(q=>q.status==='running'&&next.linkQueue?.find(n=>n.id===q.id)?.status==='done'));
+ if(finished)notify('Pronto. Os arquivos estão na pasta escolhida e em Histórico e arquivos prontos.');
  state=next;setText('connection','● Neste computador');$('save-warning').hidden=!state.persistenceWarning;if(state.persistenceWarning)setText('save-warning',state.persistenceWarning);
  if(first){$('url').value=state.url;$('folder').value=state.folder;$('quality').value=state.quality;$('cookies').value=state.cookieFile||'';const p=state.processingPrefs||{};$('with-subtitles').checked=p.subtitles??true;$('with-merge').checked=p.merge??false;$('source-language').value=p.language||'auto';$('subtitle-language').value=p.subtitleLanguage||'pt';}
  const entries=state.library?.entries||[], key=JSON.stringify(entries.map(e=>[e.id,e.title]));
@@ -47,6 +49,7 @@ function render(next,first=false){
  for(const e of entries){const r=rows.get(e.id),j=job(e.id);r.status.textContent=duration(e.duration)+' · '+(labels[j?.status]||'Disponível');r.status.className=j?.status||'';r.status.title=j?.error||'';r.button.hidden=j?.status!=='done';if(j?.thumbnail&&r.img.hidden){r.img.src='/api/thumbnail?id='+encodeURIComponent(j.id);r.img.hidden=false;}}
  setText('episode-count',entries.length+' vídeos');setText('collection-name',state.library?.title||'Os vídeos aparecem aqui depois de buscar o link.');$('episodes-empty').hidden=!!entries.length;selection();renderLinkQueue();
  const current=state.jobs.find(j=>['downloading','merging','checking'].includes(j.status)),op=state.operation, running=op?.status==='running',flow=state.workflow;
+ const showProgress=state.busy||running||['downloading','processing','blocked'].includes(flow?.status)||op?.status==='error';$('processing-panel').hidden=!showProgress;$('stage-status').hidden=!showProgress;
  const stageNames={merge:'2. União dos vídeos',transcribe:'3. Transcrição com Whisper',translate:'4. Tradução para português'};
  setText('stage-status',running?(stageNames[op.stage]||'Preparando')+' · '+Math.round(op.stageProgress||0)+'% desta etapa · painel conectado'+(op.updatedAt?' · atualização há '+Math.max(0,Math.floor((Date.now()-Date.parse(op.updatedAt))/1000))+' s':''):flow?.status==='done'?'Processamento concluído. Use os links de MP4 e legenda SRT acima.':'');
  $('pause').hidden=!state.busy;$('pause').disabled=action;$('cancel-operation').hidden=!running;$('cancel-operation').disabled=action;
@@ -56,15 +59,20 @@ function render(next,first=false){
  setText('queue-count',flowDone+' de '+flowJobs.length+' vídeos prontos');setText('speed',running?Math.round(op.progress||0)+'%':current?.speed?Math.round(current.speed/1024)+' KB/s · '+current.progress+'%':'');
  $('total-progress').value=running?op.progress||0:100*(flowDone+(current?.progress||0)/100)/Math.max(1,flowJobs.length);
  setText('workflow-description',flow&&['downloading','processing'].includes(flow.status)?'Esta execução: '+(flow.merge?'juntar em um MP4':'manter vídeos separados')+' · '+(flow.subtitles?(flow.subtitleLanguage==='pt'?'gerar legenda em português':'gerar legenda original'):'sem gerar legenda')+'.':flow?.status==='blocked'?'O processamento espera os vídeos com erro serem retomados.':'');
- const exports=state.exports||[],outKey=JSON.stringify(exports.map(e=>[e.id,e.subtitles?.createdAt]));if(outKey!==exportKey){exportKey=outKey;$('export-results').replaceChildren();for(const item of exports){const row=document.createElement('div');row.className='export-item';const label=document.createElement('span');label.textContent=item.sourceIds.length+' vídeos unidos · '+duration(item.duration)+(item.subtitles?' · com legenda':'');const button=document.createElement('button');button.className='text-button';button.textContent='Prévia';button.onclick=()=>preview(item);const link=document.createElement('a');link.textContent='Salvar MP4 ↗';link.href='/api/media?id='+encodeURIComponent(item.id)+'&download=1';row.append(label,button,link);if(item.subtitles){const sub=document.createElement('a');sub.textContent=item.subtitles.language==='pt'?'Legenda PT-BR ↓':'Legenda original ↓';sub.href='/api/subtitle?id='+encodeURIComponent(item.id)+'&format=srt&download=1';row.append(sub);}$('export-results').append(row);}}
+ const archivedResults=new Set((state.linkQueue||[]).filter(q=>q.status==='done').map(q=>q.resultId));
+ const exports=(state.exports||[]).filter(e=>!archivedResults.has(e.id)),outKey=JSON.stringify(exports.map(e=>[e.id,e.subtitles?.createdAt]));if(outKey!==exportKey){exportKey=outKey;$('export-results').replaceChildren();for(const item of exports){const row=document.createElement('div');row.className='export-item';const label=document.createElement('span');label.textContent=item.sourceIds.length+' vídeos unidos · '+duration(item.duration)+(item.subtitles?' · com legenda':'');const button=document.createElement('button');button.className='text-button';button.textContent='Prévia';button.onclick=()=>preview(item);const link=document.createElement('a');link.textContent='Salvar MP4 ↗';link.href='/api/media?id='+encodeURIComponent(item.id)+'&download=1';row.append(label,button,link);if(item.subtitles){const sub=document.createElement('a');sub.textContent=item.subtitles.language==='pt'?'Legenda PT-BR ↓':'Legenda original ↓';sub.href='/api/subtitle?id='+encodeURIComponent(item.id)+'&format=srt&download=1';row.append(sub);}$('export-results').append(row);}}
  const lk=JSON.stringify(state.logs.at(-1));if(lk!==logKey){logKey=lk;$('logs').replaceChildren();for(const log of [...state.logs].reverse()){const line=document.createElement('div');line.textContent=new Date(log.time).toLocaleTimeString('pt-BR')+' · '+log.message;$('logs').append(line);}}
 }
 
 function renderLinkQueue(){
  const list=state.linkQueue||[],pending=list.filter(q=>['pending','paused'].includes(q.status)).length;
- setText('link-queue-count',pending+' aguardando');$('link-queue-empty').hidden=!!list.length;
+ const remaining=list.filter(q=>q.status!=='done'),completed=list.filter(q=>q.status==='done');
+ setText('link-queue-count',pending+' aguardando');$('link-queue-empty').hidden=!!remaining.length;
+ $('link-queue-panel').hidden=!remaining.length&&!$('bulk-links').open;
+ const archiveIds=new Set(completed.map(q=>q.resultId)),historyCount=completed.length+(state.exports||[]).filter(e=>!archiveIds.has(e.id)).length;
+ $('download-history').hidden=!historyCount;setText('history-count',historyCount+' resultados');
  setText('queue-help',state.queueEnabled?'A fila continua automaticamente: baixa, junta e legenda cada link antes de passar ao próximo.':list.some(q=>q.status==='running')?'O item atual vai terminar. Os próximos aguardam você iniciar a fila.':'Cada item guarda sua própria pasta e opções. A fila fica salva ao fechar o programa.');
- renderQueueNow();const key=JSON.stringify(list.map(q=>[q.id,q.status,q.title,q.error,q.jobIds,q.resultId,q.processing]));if(key===queueKey){updateQueueRows();return;}queueKey=key;queueRows.clear();$('link-queue-items').replaceChildren();
+ renderQueueNow();const key=JSON.stringify(list.map(q=>[q.id,q.status,q.title,q.error,q.jobIds,q.resultId,q.processing]));if(key===queueKey){updateQueueRows();return;}queueKey=key;queueRows.clear();$('link-queue-items').replaceChildren();$('link-history-items').replaceChildren();
  const status={pending:'Na fila',running:'Em andamento',paused:'Pausado',error:'Falhou · pode retomar',done:'Concluído'};
  for(const [index,q] of list.entries()){
   const row=document.createElement('article');row.className='queue-item '+q.status;
@@ -84,7 +92,7 @@ function renderLinkQueue(){
    const items=q.resultId?[state.exports.find(e=>e.id===q.resultId)]:state.jobs.filter(j=>q.jobIds?.includes(j.id));
    for(const item of items.filter(Boolean)){const links=document.createElement('div');const a=document.createElement('a');a.textContent=item.title||'Salvar MP4';a.href='/api/media?id='+encodeURIComponent(item.id)+'&download=1';links.append(a);if(item.subtitles){const sub=document.createElement('a');sub.textContent='Legenda SRT ↓';sub.href='/api/subtitle?id='+encodeURIComponent(item.id)+'&format=srt&download=1';links.append(sub);}files.append(links);}row.append(files);
   }
-  $('link-queue-items').append(row);
+  $(q.status==='done'?'link-history-items':'link-queue-items').append(row);
  }
  updateQueueRows();
 }
@@ -104,11 +112,11 @@ function queueItemProgress(q){
 }
 function updateQueueRows(){for(const q of state.linkQueue||[]){const row=queueRows.get(q.id);if(!row)continue;row.live.textContent=queueItemProgress(q).phase;}}
 function renderQueueNow(){
- const list=state.linkQueue||[],active=list.find(q=>q.status==='running'),waiting=list.filter(q=>['pending','paused'].includes(q.status)),done=list.filter(q=>q.status==='done').length,errors=list.filter(q=>q.status==='error').length;
- $('queue-now').hidden=!list.length; if(!list.length)return;
+ const list=(state.linkQueue||[]).filter(q=>q.status!=='done'),active=list.find(q=>q.status==='running'),waiting=list.filter(q=>['pending','paused'].includes(q.status)),done=list.filter(q=>q.status==='done').length,errors=list.filter(q=>q.status==='error').length;
+ $('queue-now').hidden=!active&&!waiting.length; if($('queue-now').hidden)return;
  $('queue-now').classList.toggle('is-running',!!active&&!disconnected);
- setText('link-queue-count',list.length+' links salvos · '+waiting.length+' aguardando');
- setText('queue-totals',done+'/'+list.length+' concluídos'+(errors?' · '+errors+' com erro':''));
+ setText('link-queue-count',waiting.length+' aguardando'+(active?' · 1 em andamento':'')+(errors?' · '+errors+' com erro':''));
+ setText('queue-totals',waiting.length+' aguardando'+(errors?' · '+errors+' com erro':''));
  setText('queue-now-label',disconnected?'SEM CONEXÃO':active?'EM ANDAMENTO · LINK '+(list.indexOf(active)+1)+' DE '+list.length:waiting.length?'FILA AGUARDANDO INÍCIO':errors?'FILA ENCERRADA COM ERROS':'FILA CONCLUÍDA');
  setText('queue-now-title',active?active.title:waiting.length?waiting.length+' links prontos para iniciar':errors?'Confira os itens com erro abaixo.':'Todas as playlists foram processadas.');
  const detail=active?queueItemProgress(active):null;
@@ -118,6 +126,8 @@ function renderQueueNow(){
 }
 async function beginQueue(){notify('Iniciando a fila…');render(await api('queue/start',{}));$('notice').hidden=true;$('queue-now').scrollIntoView({behavior:'smooth',block:'center'});}
 
+$('show-bulk-links').onclick=()=>{$('bulk-links').open=true;$('link-queue-panel').hidden=false;$('link-queue-panel').scrollIntoView({behavior:'smooth',block:'start'});$('queue-urls').focus({preventScroll:true});};
+$('bulk-links').addEventListener('toggle',()=>{if(state)$('link-queue-panel').hidden=!(state.linkQueue||[]).some(q=>q.status!=='done')&&!$('bulk-links').open;});
 $('queue-urls').addEventListener('input',selection);
 $('queue-add-links').onclick=()=>perform(async()=>{const urls=$('queue-urls').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);render(await api('queue/add',{urls,...settings(),processing:processing()}));$('queue-urls').value='';notify('Links adicionados. Use Iniciar fila quando estiver pronto.');});
 $('queue-add-selection').onclick=()=>perform(async()=>{render(await api('queue/add',{ids:[...selected],...settings(),processing:processing()}));notify('Seleção adicionada à fila com as opções atuais. Você já pode buscar outro link.');});

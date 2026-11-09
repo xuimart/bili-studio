@@ -1,6 +1,6 @@
 {
   "name": "bilibili-biblioteca",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "private": true,
   "description": "Aplicativo Windows para organizar, baixar e legendar bibliotecas do Bilibili",
   "scripts": {
@@ -13,7 +13,8 @@
     "dist:dir": "npm run prepare:tools && electron-builder --win dir --x64 --publish never",
     "test:formats": "node scripts/verify-formats.cjs",
     "test:desktop": "node scripts/smoke-desktop.cjs",
-    "test:release": "node scripts/check-release.cjs"
+    "test:release": "node scripts/check-release.cjs",
+    "test:layout": "node scripts/verify-layout.cjs"
   },
   "engines": {
     "node": ">=22"

@@ -46,6 +46,7 @@ O smoke test usa um perfil vazio em `data/desktop-smoke-*`, grava relatório e c
 - `npm test`: contratos de fila/API, retomada, checkpoints, origem/sessão, links, tradução, legendas, atualização e importação. Inclui mídia real quando FFmpeg está presente.
 - `npm run test:formats`: gera arquivos reais em vários contêineres/codecs, converte, decodifica, verifica quadros/duração/áudio e une todos. Relatório: `data/format-matrix-report.json`.
 - `npm run test:desktop`: janela Electron isolada; exige estado autenticado da API, controles, pasta preenchida e Node indisponível no renderer.
+- `npm run test:layout`: renderer real com bibliotecas sintéticas concluídas, pendentes, falhas e execução. Confere posição da seleção, histórico recolhido, preservação de abertura durante polling e acesso à entrada de vários links. Não acessa a biblioteca pessoal.
 - `npm run test:release`: inspeciona o ASAR, ausência de dados pessoais/componentes locais, versão, manifesto e hashes do instalador.
 - `node scripts/verify-bilibili-live.cjs <URLs>`: teste externo opcional. A disponibilidade da plataforma pode falhar independentemente do código. Não exige cookies pessoais na CI pública.
 

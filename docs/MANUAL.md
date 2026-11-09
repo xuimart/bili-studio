@@ -2,6 +2,8 @@
 
 ## Downloads e fila
 
+O fluxo principal é **link e pasta → seleção dos vídeos e opções**. A fila aparece depois da seleção e mostra trabalhos ativos, pendentes, pausados ou com erro. Os concluídos ficam no painel **Histórico e arquivos prontos**, inicialmente recolhido. Abra esse painel para acessar os resultados anteriores; recolher ou mover visualmente os itens não apaga os arquivos nem a fila salva. Para montar uma fila de vários endereços, use **Colar vários links** junto ao campo do link.
+
 Cole um link em **Link da playlist ou vídeo** e busque os episódios. A seleção começa com todos os episódios identificados. Escolha a pasta, a qualidade, os episódios e o resultado. **Adicionar seleção à fila** guarda essas opções para aquele trabalho. Na área de vários links, cole um endereço por linha e adicione-os; cada link mantém sua própria subpasta e opções.
 
 **Iniciar fila** executa uma biblioteca de cada vez. A fila informa a biblioteca atual, a etapa, o progresso e os próximos trabalhos. **Pausar após o atual** não corta a operação em andamento. Pausar downloads preserva os arquivos parciais. Um trabalho com erro pode ser retomado, reaproveitando arquivos verificados e checkpoints.
