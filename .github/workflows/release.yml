@@ -23,6 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run setup
       - run: npm test
+      - run: npm run test:layout
       - run: npm run test:formats
       - run: npm run dist
       - run: npm run test:release
