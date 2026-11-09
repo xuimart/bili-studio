@@ -1,6 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {normalizeUrl,resolveShortLink,makeExtractedLibrary,discover}=require('../library.cjs');
 const cases=[
+ ['https://www.bilibili.com/zh-Hans/video/BV1Q3411772i/?spm_id_from=333.1387.0.0','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['https://www.bilibili.com/zh-Hant/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['https://www.bilibili.com/zh-Hans-CN/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['https://www.bilibili.com/zh-Hant-TW/video/BV1Q3411772i/?p=2','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['https://m.bilibili.com/zh-hans/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['https://www.bilibili.com/en-Latn-US/video/av123/','https://www.bilibili.com/video/av123/'],
+ ['https://www.bilibili.com/es-419/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
  ['BV17GsezzEyi','https://www.bilibili.com/video/BV17GsezzEyi/'],
  ['av123456','https://www.bilibili.com/video/av123456/'],
  ['https://player.bilibili.com/player.html?bvid=BV17GsezzEyi&cid=123','https://www.bilibili.com/video/BV17GsezzEyi/'],
@@ -23,6 +30,15 @@ const cases=[
  ['https://t.bilibili.com/123456','https://t.bilibili.com/123456']
 ];
 for(const [input,expected]of cases)test('link: '+input,()=>assert.equal(normalizeUrl(input),expected));
+
+test('prefixo de idioma não permite caminhos extras, tags malformadas ou hosts externos',()=>{
+ for(const url of ['https://www.bilibili.com/zh-Hans/extra/video/BV1Q3411772i/','https://www.bilibili.com/zh_Hans/video/BV1Q3411772i/','https://www.bilibili.com/zh--Hans/video/BV1Q3411772i/','https://evil.test/zh-Hans/video/BV1Q3411772i/'])assert.throws(()=>normalizeUrl(url));
+});
+test('descoberta do link zh-Hans consulta o vídeo canônico e mantém todas as partes',async()=>{
+ let requested;
+ const result=await discover(cases[0][0],'',async url=>{requested=url;return {ok:true,text:async()=>'<script>window.__INITIAL_STATE__ = '+JSON.stringify({videoData:{bvid:'BV1Q3411772i',title:'Teste',pages:[{page:1,part:'A',duration:10},{page:2,part:'B',duration:20}]}})+';</script>'};});
+ assert.equal(requested,'https://www.bilibili.com/video/BV1Q3411772i/');assert.equal(result.entries.length,2);assert.equal(result.entries[1].url,'https://www.bilibili.com/video/BV1Q3411772i/?p=2');
+});
 test('link curto valida cada redirecionamento antes de acessar o próximo destino',async()=>{
   let calls=0;const request=async()=>{calls++;return new Response(null,{status:302,headers:{Location:'https://www.bilibili.com/pt/video/BV17GsezzEyi/?p=3'}});};
   assert.equal(await resolveShortLink('https://b23.tv/abc',request),'https://www.bilibili.com/video/BV17GsezzEyi/');assert.equal(calls,1);
