@@ -16,7 +16,11 @@ Em **Legenda automática**, escolha detecção automática do áudio ou o idioma
 
 Na primeira solicitação, o programa prepara o Whisper base (aproximadamente 148 MB) e, para mandarim, o small (aproximadamente 488 MB). A tradução prepara o Ollama e um modelo Qwen, cujo download pode consumir vários GB. O progresso dessa preparação aparece como parte do processamento. Downloads exigem conexão; o processamento posterior é local. O tempo depende da duração do áudio, CPU, RAM e GPU.
 
-SRT e VTT ficam junto ao vídeo. A versão PT-BR de exibição usa até duas linhas de 42 caracteres, blocos de até seis segundos e reescrita mais concisa quando necessário. A versão `aligned.srt` preserva a tradução completa. A divisão de tempos dentro de um trecho reconhecido é automática e aproximada; não equivale a alinhamento de cada palavra. Nomes, conteúdo técnico, traduções e sincronização ainda podem precisar de revisão humana. Se o player já estiver aberto, recarregue a legenda ou reabra o vídeo.
+SRT e VTT de exibição ficam junto ao vídeo. A transcrição de origem fica em **Legendas originais**, e os alinhamentos completos em **Dados da legenda**, para não serem escolhidos automaticamente como legenda final. A versão PT-BR de exibição usa até duas linhas de 42 caracteres, blocos de até seis segundos e reescrita mais concisa quando necessário. A versão `aligned.srt` preserva a tradução completa. A divisão de tempos dentro de um trecho reconhecido é automática e aproximada; não equivale a alinhamento de cada palavra. Nomes, conteúdo técnico, traduções e sincronização ainda podem precisar de revisão humana. Se o player já estiver aberto, recarregue a legenda ou reabra o vídeo.
+
+Se a tradução falhar, o vídeo pode estar pronto enquanto a legenda portuguesa ainda precisa ser retomada. O programa preserva a transcrição e mostra a pendência; não ativa a faixa chinesa no lugar do português. Retomar reaproveita o trabalho salvo. Uma legenda PT já pronta continua disponível enquanto uma nova tentativa é feita.
+
+Se um player externo continuar mostrando chinês, selecione o SRT com o mesmo nome do MP4 ou recarregue a legenda. Players podem manter a faixa anterior em memória. Arquivos abertos podem adiar a organização das fontes; os originais são preservados e o programa tenta organizá-los de novo quando estiver ocioso.
 
 ## União
 

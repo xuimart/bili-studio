@@ -55,3 +55,7 @@ Testes sintéticos verificam o pipeline local. Reconhecer um padrão de URL com 
 ## Contribuir
 
 Crie branches `codex/<assunto>` e abra PRs. Altere versões e documentação junto com o comportamento. Nunca adicione `data/`, `downloads/`, `bin/`, cookies, `.env`, chaves, tokens ou capturas da biblioteca pessoal. Use fixtures públicas ou seus próprios vídeos autorizados.
+
+## Recuperar tradução local
+
+Com os trabalhos do aplicativo parados, execute `node scripts/recover-portuguese.cjs <export-id>` para um resultado unido. Por padrão, lê o perfil do usuário em `%LOCALAPPDATA%\Bili Studio`; `BILI_RECOVERY_PROFILE` permite escolher um perfil isolado. Vídeo e transcrição são reaproveitados, o progresso fica em `portuguese-recovery-status.json` e o resultado validado fica em `subtitle-repairs/`. A versão 4.0.3 importa a recuperação quando estiver ociosa ou na próxima abertura. Preserve o perfil antes de manutenção; não rode dois tradutores sobre o mesmo resultado. O script não controla janelas nem inicia downloads de vídeos.
