@@ -13,6 +13,7 @@ const { findEngine, MODEL } = require('./whisper.cjs');
 const { prefetch } = require('./fast-download.cjs');
 const {subtitleDelivery,applySubtitleRepairs}=require('./subtitle-delivery.cjs');
 const {organizeLibraries,captionBase}=require('./library-files.cjs');
+const {generateSummary}=require('./topic-summary.cjs');
 const {APP_ROOT:ROOT,DATA_DIR,BIN_DIR,DOWNLOAD_DIR}=require('./runtime-paths.cjs');
 const DEFAULT_URL = '';
 function launch(executable, args) { return spawn(executable, args, { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] }); }
@@ -61,6 +62,7 @@ function createApp(options = {}) {
   const saved = loadState(stateFile);
   const state = { url: DEFAULT_URL, folder: DOWNLOAD_DIR, quality: 'best', cookieFile: '', library: null, jobs: [], logs: [], exports: [], operation: null, linkQueue: [], ...saved, queueEnabled: false, busy: false, discovering: false, auditing: false };
   for (const item of state.linkQueue) if (item.status === 'running') item.status = 'paused';
+  for (const item of state.exports) if(item.topicSummaryStatus==='running')item.topicSummaryStatus='paused';
   for (const job of state.jobs) if (['downloading', 'queued', 'merging', 'checking'].includes(job.status)) job.status = 'paused';
   if (state.operation?.status === 'running') { state.operation.status = 'interrupted'; state.operation.phase = 'Interrompido ao encerrar o painel. Você pode iniciar novamente.'; }
   if (['downloading','processing'].includes(state.workflow?.status)) state.workflow.status = 'paused';
@@ -115,9 +117,10 @@ function createApp(options = {}) {
     const hasMerge = type === 'merge' || (type === 'workflow' && processing.merge);
     const hasCaptions = type === 'subtitles' || (type === 'workflow' && processing.subtitles);
     const hasTranslation = hasCaptions && processing.subtitleLanguage === 'pt';
+    const hasSummary = type==='summary'||hasCaptions&&processing.summary!==false;
     const mergeEnd = hasCaptions ? 60 : 100;
     const captionStart = hasMerge ? mergeEnd : 0, captionEnd = hasTranslation ? 80 : 100;
-    const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:from+(to-from)*(p.progress||0)/100});
+    const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:(from+(to-from)*(p.progress||0)/100)*(hasSummary&&stage!=='summary'?.85:1)});
     persist(true);
     void (async () => {
       let currentCaption=null;
@@ -162,7 +165,14 @@ function createApp(options = {}) {
             item.subtitleDelivery.status='done';operation.completed = index + 1; persist(true);
           }
         }
-        update({ status: 'done', phase: type === 'workflow' ? 'Tudo pronto. Os arquivos estão na pasta escolhida.' : type === 'merge' ? 'Vídeo unido pronto, com áudio e capítulos.' : 'Legendas prontas para assistir e baixar.', progress: 100, completed: items.length, completedAt: new Date().toISOString() });
+        currentCaption=null;
+        if(hasSummary)for(const item of captionItems.filter(i=>i.type==='merged')){
+          item.topicSummaryStatus='running';item.topicSummaryError='';update({currentId:item.id,currentTitle:item.title});persist(true);
+          try{item.topicSummary=await(options.generateSummary||generateSummary)(item,{signal,update:stageUpdate('summary',type==='summary'?0:85,100)});item.topicSummaryStatus='done';}
+          catch(error){item.topicSummaryStatus=signal.aborted?'paused':'error';item.topicSummaryError=error.message;if(type==='summary'||signal.aborted)throw error;log('Vídeo e legenda prontos. Sumário precisa ser retomado: '+error.message,'warning');}
+          persist(true);
+        }
+        update({ status: 'done', phase: captionItems.some(i=>i.topicSummaryStatus==='error')?'Vídeo e legenda prontos. O sumário precisa ser retomado em Assuntos e tempos.':type==='summary'?'Sumário por assuntos pronto.':type === 'workflow' ? 'Tudo pronto. Os arquivos estão na pasta escolhida.' : type === 'merge' ? 'Vídeo unido pronto, com áudio e capítulos.' : 'Legendas prontas para assistir e baixar.', progress: 100, completed: items.length, completedAt: new Date().toISOString() });
         if (type === 'workflow') state.workflow.status = 'done';
         log(operation.phase, 'success');
       } catch (error) {
@@ -281,7 +291,8 @@ function createApp(options = {}) {
     persist(true);
   }
   function processingOptions(body) {
-    const p = { merge:false, subtitles:false, language:'auto', subtitleLanguage:'original', ...body.processing };
+    const p = { merge:false, subtitles:false, summary:true,language:'auto', subtitleLanguage:'original', ...body.processing };
+    if(typeof p.summary!=='boolean')throw Error('Opção de sumário inválida.');
     if (typeof p.merge !== 'boolean' || typeof p.subtitles !== 'boolean' || !['auto','en','pt','zh','es','fr','ja','de','it','ko'].includes(p.language) || !['original','pt'].includes(p.subtitleLanguage)) throw new Error('Opções de processamento inválidas.');
     return p;
   }
@@ -393,10 +404,11 @@ function createApp(options = {}) {
     }
     if (!req.headers.cookie?.split(';').some(p => p.trim() === `bilibili_session=${token}`)) return send(401, { error: 'Abra o Bili Studio pelo atalho do aplicativo.' });
     if (req.method === 'GET' && url.pathname === '/api/state') return send(200, publicState());
-    if (['GET', 'HEAD'].includes(req.method) && ['/api/media', '/api/thumbnail', '/api/subtitle'].includes(url.pathname)) {
+    if (['GET', 'HEAD'].includes(req.method) && ['/api/media', '/api/thumbnail', '/api/subtitle','/api/summary'].includes(url.pathname)) {
       const item = [...state.jobs, ...state.exports].findLast(j => j.id === url.searchParams.get('id'));
       if (!item || item.status !== 'done') return send(404, { error: 'Vídeo ainda não disponível.' });
       let file, mime;
+      if(url.pathname==='/api/summary'){file=item.topicSummary?.markdown;mime='text/markdown; charset=utf-8';}
       if (url.pathname === '/api/media') { if (!item.media?.audioVerified) return send(409, { error: 'O áudio deste vídeo ainda está sendo verificado.' }); file = item.output; mime = 'video/mp4'; }
       if (url.pathname === '/api/thumbnail') { file = item.thumbnail; mime = 'image/jpeg'; }
       if (url.pathname === '/api/subtitle') { const delivery=subtitleDelivery(item,state);if(!delivery.ready)return send(409,{error:delivery.notice});const format = url.searchParams.get('format') || 'vtt'; if (!['vtt', 'srt', 'txt'].includes(format)) return send(400, { error: 'Formato inválido.' }); file = item.subtitles?.[format]; mime = format === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8'; }
@@ -455,6 +467,10 @@ function createApp(options = {}) {
           const language = body.language || 'auto'; if (!['auto', 'pt', 'en', 'zh', 'es', 'fr', 'ja', 'de', 'it', 'ko'].includes(language)) throw new Error('Idioma não suportado.');
           const target=body.subtitleLanguage||'original';if(!['pt','original'].includes(target))throw Error('Idioma da legenda não suportado.');
           startOperation('subtitles', selectedFinished(body.ids, true), language,{subtitleLanguage:target});
+        } else if(url.pathname==='/api/summary'){
+          const items=selectedFinished(body.ids,true);
+          if(items.some(i=>i.type!=='merged'||!subtitleDelivery(i,state).ready))throw Error('O sumário precisa de um vídeo unido com legenda pronta.');
+          startOperation('summary',items);
         } else if (url.pathname === '/api/cancel-operation') {
           state.queueEnabled=false;operationController?.abort();
         } else if (url.pathname === '/api/pause' || url.pathname === '/api/shutdown') {

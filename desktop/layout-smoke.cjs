@@ -25,6 +25,12 @@ app.whenReady().then(async()=>{
  await win.webContents.executeJavaScript('poll()');await win.webContents.executeJavaScript('preview(state.exports[0])');
  const captionGuard=await win.webContents.executeJavaScript('({tracks:document.querySelector("#player").querySelectorAll("track").length,downloadHidden:document.querySelector("#download-srt").hidden,notice:document.querySelector("#preview-caption-status").textContent})');
  assert.equal(captionGuard.tracks,0);assert.equal(captionGuard.downloadHidden,true);assert.match(captionGuard.notice,/português falhou/);await win.webContents.executeJavaScript('document.querySelector("#preview-dialog").close()');
+ const media=require('../media.cjs');await media.execute(path.join(require('../runtime-paths.cjs').BIN_DIR,'ffmpeg.exe'),['-v','error','-f','lavfi','-i','color=size=128x72:rate=24','-f','lavfi','-i','sine=frequency=440','-t','2','-c:v','libx264','-c:a','aac','-y',state.exports[0].output]);
+ Object.assign(state.exports[0],{type:'merged',media:{audioVerified:true},subtitleDelivery:{requestedLanguage:'pt',status:'done'},subtitles:{language:'pt'},topicSummaryStatus:'done',topicSummary:{fingerprint:'test',topics:[{start:1,end:1.8,title:'Proporção e construção',description:'Relação entre as formas.'}]}});state.exports[0].subtitles.srt=path.join(profile,'pt.srt');
+ await win.webContents.executeJavaScript('poll()');await win.webContents.executeJavaScript('preview(state.exports[0])');
+ await win.webContents.executeJavaScript('new Promise(resolve=>{const p=document.querySelector("#player");if(p.readyState>=1)resolve();else p.addEventListener("loadedmetadata",resolve,{once:true});})');
+ const summarySeek=await win.webContents.executeJavaScript('(()=>{document.querySelector(".topic-seek").click();document.querySelector("#player").pause();return{time:document.querySelector("#player").currentTime,count:document.querySelector("#summary-topics").children.length,downloadHidden:document.querySelector("#download-summary").hidden};})()');
+ assert.ok(summarySeek.time>=.95&&summarySeek.time<1.2);assert.equal(summarySeek.count,1);assert.equal(summarySeek.downloadHidden,false);await win.webContents.executeJavaScript('document.querySelector("#preview-dialog").close()');
 
  await win.webContents.executeJavaScript(`document.querySelector('#download-history').open=true;`);
  await win.webContents.executeJavaScript('poll()');
@@ -40,7 +46,7 @@ app.whenReady().then(async()=>{
  state.fileOrganization={warnings:[{error:'Locked fixture'}]};await win.webContents.executeJavaScript('poll()');
  const organizationWarning=await win.webContents.executeJavaScript('({hidden:document.querySelector("#save-warning").hidden,text:document.querySelector("#save-warning").textContent})');
  assert.equal(organizationWarning.hidden,false);assert.match(organizationWarning.text,/não puderam ser organizados/);
- const report={captionGuard,organizationWarning,version:require('../package.json').version,completedHistory:initial,bulk,pending,active,checks:'Concluídos recolhidos; seleção imediatamente após o link; pendentes/erros/ativo visíveis; histórico permanece aberto durante polling; atalhos de vários links funcionam; organização bloqueada é informada.'};
+ const report={captionGuard,summarySeek,organizationWarning,version:require('../package.json').version,completedHistory:initial,bulk,pending,active,checks:'Histórico recolhido; seleção e fila; proteção PT-BR; sumário visível e clique busca o tempo no vídeo real; organização bloqueada é informada.'};
  fs.writeFileSync(path.join(profile,'layout-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));console.log('Evidência: '+profile);
  state.queueEnabled=false;backend.server.close();app.exit(0);
 }).catch(e=>{console.error(e.stack);backend?.server.close();app.exit(1);});

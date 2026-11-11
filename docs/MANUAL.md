@@ -45,6 +45,16 @@ Sem união, os episódios continuam sendo os arquivos principais; cada SRT acomp
 
 Bibliotecas antigas são organizadas automaticamente com o aplicativo ocioso. Os episódios, fontes e backups são movidos, não reconvertidos nem apagados, e os caminhos do histórico são atualizados. Feche o vídeo no player externo para liberar arquivos bloqueados. A organização usa um diário de movimentos e salva um backup de `state.json` no perfil; restaurar só um estado antigo não desfaz movimentos de arquivos.
 
+## Sumário por assuntos
+
+Com união e legenda ligadas, marque **Gerar sumário por assuntos depois da legenda**. O programa usa o modelo local já preparado para ler trechos da legenda, identificar assuntos e criar títulos/descrições em português. Pode desligar a opção se quiser apenas vídeo e legenda.
+
+Abra **Histórico → Arquivos prontos → Assuntos e tempos** ou o botão **Assuntos e tempos** do resultado. Um clique no assunto busca seu horário no vídeo. **Baixar sumário** entrega Markdown; os arquivos de sumário e checkpoint ficam em **Arquivos de apoio**. Para vídeos anteriores, use **Gerar sumário**; em caso de falha, **Retomar sumário** preserva blocos válidos. O sumário não requer baixar ou transcrever o vídeo novamente.
+
+Os horários são calculados da legenda, com separação por capítulo, pausa longa e blocos de até aproximadamente oito minutos. O modelo recebe amostras contextualizadas, não imagens do vídeo. O título e a descrição são automáticos; a referência textual é copiada e conferida na fonte. Erros de reconhecimento/tradução podem prejudicar a identificação do assunto. Não equivale a alinhamento semântico exato nem revisão humana de toda a aula.
+
+Se a geração falhar, vídeo e legenda continuam prontos. Retome o sumário separadamente. A primeira geração pode precisar preparar o modelo local e levar tempo; blocos já concluídos são reutilizados.
+
 ## Fechar, atualizar e recuperar
 
 Durante um trabalho, fechar a janela oferece continuar em segundo plano, manter a janela aberta ou pausar e sair. A bandeja do Windows permite reabrir a janela. Enquanto há trabalho, o aplicativo solicita que o Windows não suspenda automaticamente a sessão; isso termina quando a fila fica inativa.

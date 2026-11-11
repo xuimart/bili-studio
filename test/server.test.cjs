@@ -20,6 +20,17 @@ async function fixture(t, extra = {}) {
   return { app, request, dataDir, origin };
 }
 async function idle(app) { const deadline = Date.now() + 3000; while (app.state.busy && Date.now() < deadline) await new Promise(r => setTimeout(r, 10)); assert.equal(app.state.busy, false); }
+test('sumário usa legenda pronta, permite baixar Markdown e falha isolada não invalida legenda',async t=>{
+ let calls=0,fail=false;const {app,request,dataDir}=await fixture(t,{generateSummary:async()=>{calls++;if(fail)throw Error('modelo de teste indisponível');const markdown=path.join(dataDir,'summary.md');fs.writeFileSync(markdown,'# Assunto\n00:00:01 · Proporção');return{markdown,topics:[{start:1,end:2,title:'Proporção',description:'Estudo das proporções.'}],fingerprint:'fixture'};}});
+ const output=path.join(dataDir,'merged.mp4'),srt=path.join(dataDir,'captions.srt');fs.writeFileSync(output,'fixture');fs.writeFileSync(srt,'1\n00:00:01,000 --> 00:00:02,000\nProporção.\n');
+ const item={id:'export-summary',type:'merged',status:'done',title:'Teste',output,sourceIds:[],subtitles:{language:'pt',srt,vtt:srt,detectionVersion:2},subtitleDelivery:{requestedLanguage:'pt',status:'done'}};app.state.exports.push(item);
+ assert.equal((await request('/api/summary',{ids:[item.id]})).status,200);await until(()=>app.state.operation.status==='done');assert.equal(calls,1);assert.equal(item.topicSummaryStatus,'done');assert.match(await(await request('/api/summary?id='+item.id+'&download=1')).text(),/Proporção/);
+ fail=true;assert.equal((await request('/api/subtitles',{ids:[item.id],language:'pt',subtitleLanguage:'pt'})).status,200);await until(()=>app.state.operation.status==='done');assert.equal(item.subtitleDelivery.status,'done');assert.equal(item.topicSummaryStatus,'error');assert.equal(item.subtitles.language,'pt');assert.ok(item.topicSummary);
+});
+test('sumário recusa vídeo individual e tradução portuguesa ainda pendente',async t=>{
+ const {app,request,dataDir}=await fixture(t);const output=path.join(dataDir,'a.mp4');fs.writeFileSync(output,'fixture');const item={id:'summary-pending',type:'merged',status:'done',title:'Aula',output,sourceIds:[],subtitles:{language:'zh',srt:'source'},subtitleDelivery:{requestedLanguage:'pt',status:'error'}};app.state.exports.push(item);
+ assert.equal((await request('/api/summary',{ids:[item.id]})).status,400);item.subtitles.language='pt';item.type='individual';assert.equal((await request('/api/summary',{ids:[item.id]})).status,400);
+});
 test('API local exige sessão e rejeita origem externa e DNS rebinding', async t => {
   const { request, origin } = await fixture(t);
   assert.equal((await fetch(origin + '/api/state')).status, 401);

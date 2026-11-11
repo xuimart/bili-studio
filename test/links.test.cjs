@@ -1,6 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {normalizeUrl,resolveShortLink,makeExtractedLibrary,discover}=require('../library.cjs');
 const cases=[
+ ['bilibili.com/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['www.bilibili.com/pt-BR/video/BV1Q3411772i/?p=2','https://www.bilibili.com/video/BV1Q3411772i/'],
+ ['b23.tv/Abc12','https://b23.tv/Abc12'],
+ ['https://www.bilibili.com/video/BV1Q3411772i/?spm=1&amp;p=3#reply','https://www.bilibili.com/video/BV1Q3411772i/'],
  ['https://www.bilibili.com/zh-Hans/video/BV1Q3411772i/?spm_id_from=333.1387.0.0','https://www.bilibili.com/video/BV1Q3411772i/'],
  ['https://www.bilibili.com/zh-Hant/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
  ['https://www.bilibili.com/zh-Hans-CN/video/BV1Q3411772i/','https://www.bilibili.com/video/BV1Q3411772i/'],
@@ -38,6 +42,13 @@ test('descoberta do link zh-Hans consulta o vídeo canônico e mantém todas as 
  let requested;
  const result=await discover(cases[0][0],'',async url=>{requested=url;return {ok:true,text:async()=>'<script>window.__INITIAL_STATE__ = '+JSON.stringify({videoData:{bvid:'BV1Q3411772i',title:'Teste',pages:[{page:1,part:'A',duration:10},{page:2,part:'B',duration:20}]}})+';</script>'};});
  assert.equal(requested,'https://www.bilibili.com/video/BV1Q3411772i/');assert.equal(result.entries.length,2);assert.equal(result.entries[1].url,'https://www.bilibili.com/video/BV1Q3411772i/?p=2');
+});
+test('adaptador aceita identificadores BV planos e recusa partes inválidas e destinos externos',()=>{
+ const source='https://space.bilibili.com/1/lists/2?type=season';
+ const result=makeExtractedLibrary({entries:[{id:'BV1Q3411772i',url:'BV1Q3411772i',title:'Aula'}]},source);assert.equal(result.entries[0].url,'https://www.bilibili.com/video/BV1Q3411772i/?p=1');
+ assert.equal(makeExtractedLibrary({entries:[{url:'www.bilibili.com/video/BV1Q3411772i/?p=2'}]},source).entries[0].page,2);
+ for(const url of ['https://www.bilibili.com/video/BV1Q3411772i/?p=-2','https://www.bilibili.com/video/BV1Q3411772i/?p=1.5','https://www.bilibili.com/video/BV1Q3411772i/?p=Infinity','https://evil.test/video/BV1Q3411772i/'])assert.throws(()=>makeExtractedLibrary({entries:[{url}]},source));
+ for(const url of ['bilibili.com.evil.test/video/BV1Q3411772i','bilibili.com@evil.test/video/BV1Q3411772i','www.bilibili.com:9000/video/BV1Q3411772i'])assert.throws(()=>normalizeUrl(url));
 });
 test('link curto valida cada redirecionamento antes de acessar o próximo destino',async()=>{
   let calls=0;const request=async()=>{calls++;return new Response(null,{status:302,headers:{Location:'https://www.bilibili.com/pt/video/BV17GsezzEyi/?p=3'}});};
