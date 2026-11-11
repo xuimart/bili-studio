@@ -69,8 +69,9 @@ async function transcribe(item,language,{signal,update=()=>{}}={}){
   cues.push(...chunk);update({phase:'Transcrição '+spokenName+' · '+(i+1)+' de '+total+' blocos salvos',progress:(i+1)/total*97});
  }
  if(!cues.length)throw Error('O Whisper não encontrou fala suficiente para gerar legendas.');
- const originalDir=path.join(path.dirname(item.output),'Legendas originais');fs.mkdirSync(originalDir,{recursive:true});
- const outputBase=path.join(originalDir,path.basename(item.output).replace(/\.mp4$/i,'')+'.whisper-'+Date.now()),outputs={};
+ const originalDir=path.join(item.libraryRoot||item.target||path.dirname(item.output),'Arquivos de apoio','Legendas originais');fs.mkdirSync(originalDir,{recursive:true});
+ const rawStem=require('./library.cjs').safeName(path.basename(item.output).replace(/\.mp4$/i,''),Math.max(16,Math.min(65,220-originalDir.length-24)));
+ const outputBase=path.join(originalDir,rawStem+'.whisper-'+Date.now()),outputs={};
  const srt=cues.map((c,i)=>(i+1)+'\n'+timestamp(c.start)+' --> '+timestamp(c.end)+'\n'+c.text).join('\n\n')+'\n';
  const vtt='WEBVTT\n\n'+cues.map(c=>timestamp(c.start).replace(',','.')+' --> '+timestamp(c.end).replace(',','.')+'\n'+c.text.replaceAll('&','&amp;').replaceAll('<','&lt;')).join('\n\n')+'\n';
  for(const [ext,text]of Object.entries({srt,vtt,txt:cues.map(c=>c.text).join('\n')})){outputs[ext]=outputBase+'.'+ext;fs.writeFileSync(outputs[ext],text,{flag:'wx'});}

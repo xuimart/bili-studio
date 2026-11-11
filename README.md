@@ -25,6 +25,7 @@ Não precisa instalar Node.js, Python, FFmpeg ou Ollama manualmente. As ferramen
 
 - Vídeos MP4 com H.264 e AAC, conferidos antes de serem marcados como prontos.
 - União na ordem selecionada, com capítulos e episódios individuais preservados.
+- MP4 unido e SRT com o nome da playlist; episódios separados e arquivos de apoio organizados em subpastas.
 - Legendas SRT/VTT, detecção de idioma e tradução local para PT-BR.
 - Legendas de exibição com até duas linhas de 42 caracteres e blocos de até seis segundos. A tradução completa fica preservada separadamente.
 - Fila persistente, retomada de arquivos parciais e checkpoints de processamento.

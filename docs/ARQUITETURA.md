@@ -21,6 +21,7 @@ O backend escuta exclusivamente em `127.0.0.1`, em porta aleatória no desktop. 
 | `speech.cjs` / `whisper.cjs` | Detecção por amostras, reconhecimento em chunks e preparação de modelos |
 | `translate.cjs` / `ollama-transport.cjs` | Tradução local, validação de JSON/texto, retries e checkpoints |
 | `subtitle-delivery.cjs` | Disponibilidade de legenda, importação de recuperação validada e organização de fontes/alinhamentos |
+| `library-files.cjs` | Nomes finais, episódios separados, arquivos de apoio, migração e diário de movimentos |
 | `captions.cjs` / `caption-compact.cjs` | Divisão, linhas, duração e compacidade da legenda de exibição |
 | `state-store.cjs` | Snapshots temporários, salvamento recuperável e tolerância a arquivo bloqueado |
 
@@ -39,6 +40,10 @@ MKV é intermediário para aceitar combinações de codecs que não cabem de for
 - Modelos Ollama: diretório padrão do próprio Ollama (`%USERPROFILE%\.ollama`), a menos que o ambiente já configure outro.
 - Arquivos finais: pasta escolhida pelo usuário, por biblioteca.
 - Temporários/reconhecimento/união: subpastas `work` no diretório de dados e `.em-andamento` na biblioteca de destino.
+
+Após uma união concluída, `library-files.cjs` mantém somente o MP4 final e seu SRT na raiz da playlist. Individuais vão para `Episódios`; fontes, arquivos auxiliares e backups vão para `Arquivos de apoio`. A migração só roda ociosa e usa renomeação no mesmo volume, sem codificação. Todos os caminhos referenciados no estado são atualizados, incluindo histórico e checkpoint. O campo opcional `libraryRoot` mantém a raiz estável mesmo quando um arquivo está em subpasta. `playlistTitle` mantém o título sem o sufixo de quantidade de episódios.
+
+Cada movimento é gravado antes da renomeação em `library-files-journal.json` no perfil. Na abertura, o diário reconcilia estado anterior quando origem está ausente e destino tem tamanho/modificação esperados. A primeira migração salva backup do estado. Colisões preservam ambos os arquivos; links simbólicos e destinos externos à biblioteca são recusados. Arquivos bloqueados permanecem onde estão e os avisos ficam em `fileOrganization.warnings`; outra passagem tenta novamente. Não apagar o diário para restaurar apenas um snapshot antigo. Para manutenção offline: feche o aplicativo e execute `node scripts/organize-library.cjs <pasta-do-perfil>`; o relatório fica no perfil. Nunca enviar perfil, diário ou relatório para o GitHub público.
 
 Atualizações e desinstalação não removem os dados do perfil nem os vídeos. Não modificar appId, nome do aplicativo, diretórios ou política de dados numa release sem preparar migração. Importações guardam o estado anterior e só são aplicadas na próxima abertura. Novos campos no estado devem ser opcionais e manter compatibilidade com os estados anteriores.
 

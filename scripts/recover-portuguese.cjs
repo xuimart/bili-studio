@@ -11,7 +11,7 @@ async function main(){
  let original=item.subtitleSource||item.subtitles?.original||item.subtitles;
  const overrideFile=path.join(profile,'subtitle-source-repairs',item.id+'.json');if(fs.existsSync(overrideFile)){const override=JSON.parse(fs.readFileSync(overrideFile,'utf8'));if(override.output!==item.output)throw Error('Correção de fonte não corresponde ao vídeo.');original=override.original;}
 if(!original?.srt||!fs.existsSync(original.srt))throw Error('Transcrição original não encontrada.');
- const source=parseSrt(fs.readFileSync(original.srt,'utf8')),videoStat=fs.statSync(item.output),base=item.output.replace(/\.mp4$/i,'')+'.pt-BR';
+ const source=parseSrt(fs.readFileSync(original.srt,'utf8')),videoStat=fs.statSync(item.output),base=require('../library-files.cjs').captionBase(item);
  const statusFile=path.join(profile,'portuguese-recovery-status.json'),lock=path.join(profile,'portuguese-recovery-'+item.id+'.lock');
  try{const previous=JSON.parse(fs.readFileSync(lock));try{process.kill(previous.pid,0);throw Error('Já existe uma recuperação em andamento.');}catch(e){if(e.code!=='ESRCH')throw e;}fs.unlinkSync(lock);}catch(e){if(e.code!=='ENOENT')throw e;}
  fs.writeFileSync(lock,JSON.stringify({pid:process.pid,createdAt:new Date().toISOString()}),{flag:'wx'});

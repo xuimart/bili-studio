@@ -1,5 +1,6 @@
 // Real renderer regression test with synthetic state; never opens user data or downloads.
 const {app,BrowserWindow}=require('electron');
+app.disableHardwareAcceleration(); // Hidden captures must work without an active GPU session.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const profile=path.resolve('data','layout-smoke-'+Date.now());fs.mkdirSync(profile,{recursive:true});
 app.setPath('userData',profile);process.env.BILI_DATA_DIR=profile;process.env.BILI_CACHE_DIR=path.join(profile,'components');
@@ -36,7 +37,10 @@ app.whenReady().then(async()=>{
  state.linkQueue[0].status='running';state.queueEnabled=true;
  await win.webContents.executeJavaScript('poll()');const active=await read();assert.equal(active.activeRows,2);assert.equal(active.historyRows,7);assert.equal(active.queueHidden,false);
  fs.writeFileSync(path.join(profile,'active-queue.png'),(await win.webContents.capturePage()).toPNG());
- const report={captionGuard,version:require('../package.json').version,completedHistory:initial,bulk,pending,active,checks:'Concluídos recolhidos; seleção imediatamente após o link; pendentes/erros/ativo visíveis; histórico permanece aberto durante polling; atalhos de vários links funcionam.'};
+ state.fileOrganization={warnings:[{error:'Locked fixture'}]};await win.webContents.executeJavaScript('poll()');
+ const organizationWarning=await win.webContents.executeJavaScript('({hidden:document.querySelector("#save-warning").hidden,text:document.querySelector("#save-warning").textContent})');
+ assert.equal(organizationWarning.hidden,false);assert.match(organizationWarning.text,/não puderam ser organizados/);
+ const report={captionGuard,organizationWarning,version:require('../package.json').version,completedHistory:initial,bulk,pending,active,checks:'Concluídos recolhidos; seleção imediatamente após o link; pendentes/erros/ativo visíveis; histórico permanece aberto durante polling; atalhos de vários links funcionam; organização bloqueada é informada.'};
  fs.writeFileSync(path.join(profile,'layout-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));console.log('Evidência: '+profile);
  state.queueEnabled=false;backend.server.close();app.exit(0);
 }).catch(e=>{console.error(e.stack);backend?.server.close();app.exit(1);});

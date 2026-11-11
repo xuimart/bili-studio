@@ -1,5 +1,13 @@
 # Histórico
 
+## 4.0.4 — 2026-11-11
+
+- A pasta da playlist deixa à vista o vídeo unido e seu SRT com o mesmo nome da playlist, sem nomes genéricos ou data no arquivo final.
+- Episódios individuais ficam em **Episódios**. Transcrições, VTT, alinhamentos, checkpoints e versões anteriores ficam em **Arquivos de apoio**.
+- Organiza bibliotecas anteriores quando o aplicativo está ocioso, sem reconverter vídeos. Atualiza os caminhos internos, preserva arquivos e registra movimentos recuperáveis.
+- Protege nomes reservados do Windows, caracteres inválidos, Unicode e colisões de nomes; arquivos existentes nunca são sobrescritos.
+- Mantém a proteção de PT-BR: legenda original não aparece como tradução concluída.
+
 ## 4.0.3 — 2026-11-09
 
 - Tradução interrompida não entrega a transcrição original em mandarim como se a legenda PT estivesse pronta. Vídeo e legenda têm estados separados.
