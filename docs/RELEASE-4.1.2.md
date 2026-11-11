@@ -1,0 +1,3 @@
+O PDF principal do sumário fica ao lado do vídeo unido e da legenda, com o nome da playlist. HTML, Markdown, JSON e checkpoints continuam em Arquivos de apoio. Os links permanecem clicáveis.
+
+Corrige a leitura de legendas antigas para o sumário: poucos trechos instantâneos são excluídos da análise e uma sobra de até dez segundos no final é limitada à duração real do vídeo. As legendas originais permanecem intactas e os ajustes são registrados no JSON do sumário. Tempos negativos, invertidos, fora de ordem, grandes divergências e excesso de trechos inválidos continuam sendo recusados. Resultados já válidos são reaproveitados.

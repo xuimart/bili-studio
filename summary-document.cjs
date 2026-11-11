@@ -14,11 +14,12 @@ async function exportSummaryDocuments(item,{renderPdf}={}){
  const summary=item.topicSummary;if(!summary?.markdown)throw Error('Sumário ainda não está pronto.');
  const key=item.id+':'+summary.fingerprint;if(pending.has(key))return pending.get(key);
  const task=(async()=>{
-  const base=summary.markdown.replace(/\.md$/i,''),html=base+'.html',pdf=base+'.pdf';
-  if(summary.documentVersion===VERSION&&fs.existsSync(html)&&(!renderPdf||summary.pdf&&fs.existsSync(pdf)))return summary;
+  const base=summary.markdown.replace(/\.md$/i,''),html=base+'.html';
+  const pdf=item.output?path.join(path.dirname(item.output),require('./library-files.cjs').titleStem(path.dirname(item.output),'Sumário - '+path.basename(item.output,path.extname(item.output)))+'.pdf'):base+'.pdf';
+  if(summary.documentVersion===VERSION&&fs.existsSync(html)&&(!renderPdf||summary.pdf===pdf&&fs.existsSync(pdf)))return summary;
   const document=summaryHtml(item);require('./captions.cjs').write(html,document);summary.html=html;
   if(renderPdf){const bytes=await renderPdf(document);if(!Buffer.isBuffer(bytes)||!bytes.subarray(0,5).equals(Buffer.from('%PDF-'))||bytes.length<1500)throw Error('O PDF não foi gerado corretamente.');
-   if(fs.existsSync(pdf)&&!fs.readFileSync(pdf).equals(bytes))fs.copyFileSync(pdf,pdf+'.anterior-'+Date.now()+'.pdf',fs.constants.COPYFILE_EXCL);
+   if(fs.existsSync(pdf)&&!fs.readFileSync(pdf).equals(bytes))fs.copyFileSync(pdf,path.join(path.dirname(summary.markdown),'PDF-anterior-'+Date.now()+'.pdf'),fs.constants.COPYFILE_EXCL);
    fs.writeFileSync(pdf+'.tmp',bytes);fs.renameSync(pdf+'.tmp',pdf);summary.pdf=pdf;
   }
   summary.documentVersion=VERSION;if(summary.json)require('./captions.cjs').write(summary.json,JSON.stringify(summary,null,2));return summary;
