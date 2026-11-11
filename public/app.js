@@ -31,7 +31,20 @@ function selection(){
  setText('plan-summary',queued?'Fila: '+queued+' links aguardando. Cada um será processado com suas opções salvas.':!count?'Selecione os vídeos para começar.':count+' vídeos → '+(p.merge?'1 MP4 unido':'MP4 separados')+' → '+(p.subtitles?(p.subtitleLanguage==='pt'?'legenda em português':'legenda no idioma original'):'sem gerar legendas')+'.');
  setText('run-help',state?.busy||state?.operation?.status==='running'?'Você pode preparar outro link e adicionar à fila enquanto este termina.':queued?'Iniciar fila executa os links já adicionados. Para incluir esta seleção, use o botão Adicionar seleção à fila.':lock?'Aguarde a verificação dos arquivos.':p.merge&&count<2?'Selecione pelo menos 2 vídeos para juntar.':p.merge&&p.subtitles?'Depois de baixar, o painel junta os vídeos e legenda o arquivo final.':'As opções acima serão executadas automaticamente.');
 }
-let previewId=null,summaryViewKey='';
+let previewId=null,summaryViewKey='',navigationSequence=0;
+async function openSummaryTime(id,time){
+ const deadline=Date.now()+15000;while(!state&&Date.now()<deadline)await new Promise(r=>setTimeout(r,50));
+ const item=state?.exports.find(e=>e.id===id&&e.status==='done');
+ if(!item||!Number.isFinite(time)||time<0||time>604800){notify('Este vídeo não está disponível nesta biblioteca.',true);return{ok:false};}
+ const knownDuration=Number(item.duration||item.media?.duration);if(knownDuration>0&&time>=knownDuration){notify('O horário está fora da duração deste vídeo.',true);return{ok:false};}
+ if($('preview-dialog').open)$('preview-dialog').close();preview(item);const sequence=navigationSequence,player=$('player');
+ try{
+  if(player.readyState<1)await new Promise((resolve,reject)=>{const done=error=>{clearTimeout(timer);player.removeEventListener('loadedmetadata',ready);player.removeEventListener('error',failed);error?reject(error):resolve();};const ready=()=>done(),failed=()=>done(Error('Não foi possível abrir o vídeo. Confira se o arquivo está disponível.')),timer=setTimeout(()=>done(Error('O vídeo demorou para abrir. Tente novamente.')),15000);player.addEventListener('loadedmetadata',ready,{once:true});player.addEventListener('error',failed,{once:true});});
+  if(sequence!==navigationSequence||previewId!==id||!$('preview-dialog').open)return{ok:false,cancelled:true};
+  if(!Number.isFinite(player.duration)||time>=player.duration)throw Error('O horário está fora da duração deste vídeo.');
+  player.currentTime=time;await player.play().catch(()=>{});return{ok:true,id,time:player.currentTime};
+ }catch(error){notify(error.message,true);return{ok:false};}
+}
 function topicTime(value){const s=Math.floor(value);return[Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':');}
 function renderSummary(item){
  const enabled=item.type==='merged'&&item.subtitles&&item.subtitleReady!==false;$('topic-summary').hidden=!enabled;if(!enabled)return;
@@ -39,10 +52,12 @@ function renderSummary(item){
  $('generate-summary').disabled=state?.busy||state?.queueEnabled||state?.operation?.status==='running';$('generate-summary').textContent=data?'Atualizar sumário':['error','paused'].includes(item.topicSummaryStatus)?'Retomar sumário':'Gerar sumário';
  setText('summary-status',item.topicSummaryStatus==='running'?'Gerando assuntos a partir da legenda…':item.topicSummaryStatus==='paused'?'Sumário pausado. Use Retomar sumário para continuar.':item.topicSummaryError?'Não foi possível concluir o sumário. '+item.topicSummaryError:data?'Automático, baseado na legenda. Clique em um assunto para ir ao trecho; revise nomes e limites.':'Gere assuntos e tempos usando a legenda pronta, sem baixar ou transcrever novamente.');
  $('download-summary').hidden=!data;$('download-summary').href='/api/summary?id='+encodeURIComponent(item.id)+'&download=1';$('summary-topics').replaceChildren();
+ for(const format of ['pdf','html']){const link=$('download-summary-'+format);link.hidden=!data;link.href='/api/summary?id='+encodeURIComponent(item.id)+'&format='+format+'&download=1';}
  for(const topic of data?.topics||[]){const li=document.createElement('li'),button=document.createElement('button'),description=document.createElement('p');button.className='topic-seek';button.textContent=topicTime(topic.start)+'–'+topicTime(topic.end)+' · '+topic.title;button.onclick=()=>{$('player').currentTime=topic.start;$('player').play().catch(()=>{});};description.textContent=topic.description;li.append(button,description);$('summary-topics').append(li);}
  $('generate-summary').onclick=()=>perform(async()=>{render(await api('summary',{ids:[item.id]}));});
 }
 function preview(item){
+ navigationSequence++;
  const player=$('player');player.pause();player.replaceChildren();player.src='/api/media?id='+encodeURIComponent(item.id);player.muted=false;player.volume=1;
  if(item.subtitles&&item.subtitleReady!==false){const track=document.createElement('track');track.kind='subtitles';track.label=item.subtitles.language==='pt'?'Português':'Legenda';track.srclang=item.subtitles.language==='auto'?'en':item.subtitles.language;track.src='/api/subtitle?id='+encodeURIComponent(item.id)+'&format=vtt';track.default=true;player.append(track);}
  previewId=item.id;summaryViewKey='';renderSummary(item);setText('preview-title',item.title);$('download-current').href=player.src+'&download=1';$('download-srt').hidden=!item.subtitles||item.subtitleReady===false;setText('preview-caption-status',item.subtitleNotice||'');$('download-srt').href='/api/subtitle?id='+encodeURIComponent(item.id)+'&format=srt&download=1';player.load();$('preview-dialog').showModal();

@@ -23,6 +23,8 @@ O backend escuta exclusivamente em `127.0.0.1`, em porta aleatória no desktop. 
 | `subtitle-delivery.cjs` | Disponibilidade de legenda, importação de recuperação validada e organização de fontes/alinhamentos |
 | `library-files.cjs` | Nomes finais, episódios separados, arquivos de apoio, migração e diário de movimentos |
 | `topic-summary.cjs` | Sumário por assuntos, referências verificadas, tempos da fonte e retomada por bloco |
+| `summary-document.cjs` / `desktop/summary-pdf.cjs` | HTML sanitizado e impressão PDF pelo Electron incluído no produto |
+| `desktop/deep-links.cjs` | Validação de links externos do sumário e argumentos de ativação |
 | `captions.cjs` / `caption-compact.cjs` | Divisão, linhas, duração e compacidade da legenda de exibição |
 | `state-store.cjs` | Snapshots temporários, salvamento recuperável e tolerância a arquivo bloqueado |
 
@@ -57,6 +59,12 @@ Ollama usa uma instância local em `127.0.0.1:11435`, sem alterar a configuraç�
 Depois de uma união com legenda, o fluxo pode chamar `generateSummary`. O modelo local recebe até 4.200 caracteres de parágrafos amostrados por bloco; capítulos e pausas longas delimitam os grupos, com máximo aproximado de oito minutos. O modelo gera somente rótulos, descrição e ID de referência. Tempos são derivados do SRT e limitados pela duração real do vídeo; a citação é copiada pelo programa e validada na fonte. Não interpreta imagens nem garante fronteiras semânticas exatas.
 
 `topicSummary` publica o resultado completo; `topicSummaryStatus` e `topicSummaryError` registram o andamento e conservam um resultado anterior. Markdown/JSON/checkpoints ficam em Arquivos de apoio, com nome estável por exportação. Fingerprint inclui conteúdo, versão do algoritmo, duração e blocos. Cache inválido é refeito por bloco, sem descartar os outros. Falha automática mantém vídeo e legenda prontos; `/api/summary` permite geração/retomada e download. O renderer usa `textContent` e tempos numéricos do servidor para navegar no player.
+
+### Documentos clicáveis
+
+O instalador registra `bilistudio://watch/export-ID?t=segundos` em HKCU, sem administrador. O comando usa caminho e URI entre aspas, com separador `--` antes da URI. A remoção do protocolo só é feita quando o comando ainda pertence a esta instalação. O processo principal trata ativação inicial e `second-instance`, espera o renderer ficar pronto e chama navegação com ID/tempo serializados. O renderer busca exclusivamente resultados do próprio histórico, valida a duração real, carrega metadados e posiciona o player. URLs, caminhos e comandos arbitrários são recusados. A navegação não inicia downloads ou altera a fila.
+
+PDFs são impressos por uma BrowserWindow oculta, com sandbox e sem Node; não dependem de Python ou software PDF instalado. O HTML escapa título e texto da legenda e não carrega recursos externos. Links de assuntos usam apenas protocolo, ID e tempo; não expõem caminhos ou sessão. Exportações simultâneas são serializadas por resultado. Documentos anteriores são preservados quando substituídos ou quando uma exportação falha. O GET autenticado `/api/summary?format=pdf|html|markdown` permite exportação tardia sem invocar o modelo.
 
 ## Limites
 

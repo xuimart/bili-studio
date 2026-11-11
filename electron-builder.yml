@@ -21,6 +21,7 @@ files:
   - subtitle-delivery.cjs
   - library-files.cjs
   - topic-summary.cjs
+  - summary-document.cjs
   - ollama-transport.cjs
   - captions.cjs
   - caption-compact.cjs
@@ -28,6 +29,8 @@ files:
   - desktop/main.cjs
   - desktop/migration.cjs
   - desktop/update-policy.cjs
+  - desktop/deep-links.cjs
+  - desktop/summary-pdf.cjs
   - desktop/icon.png
   - LICENSE
   - THIRD-PARTY-NOTICES.md
@@ -40,7 +43,11 @@ win:
       arch: [x64]
   icon: desktop/icon.ico
   verifyUpdateCodeSignature: false
+protocols:
+  - name: Bili Studio
+    schemes: [bilistudio]
 nsis:
+  include: desktop/installer.nsh
   oneClick: false
   perMachine: false
   allowElevation: false

@@ -1,5 +1,13 @@
 # Histórico
 
+## 4.1.1 — 2026-11-11
+
+- Exporta sumário em PDF e HTML clicáveis, além do Markdown.
+- Assunto e horário abrem o Bili Studio no vídeo e tempo correspondentes, mesmo quando o programa está fechado.
+- Links usam o ID da biblioteca, sem caminhos pessoais nem tokens. Valida esquema, vídeo e tempo; não abre arquivos arbitrários.
+- Documentos ficam em Arquivos de apoio e podem ser exportados de sumários existentes sem nova geração por IA.
+- Verificados 100 links de um PDF real de 12 páginas e navegação no player pelo aplicativo empacotado.
+
 ## 4.1.0 — 2026-11-11
 
 - Sumário por assuntos depois da união e da legenda: títulos, descrições e tempos reais, com navegação pelo player e download Markdown.

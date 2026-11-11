@@ -55,6 +55,14 @@ Os horários são calculados da legenda, com separação por capítulo, pausa lo
 
 Se a geração falhar, vídeo e legenda continuam prontos. Retome o sumário separadamente. A primeira geração pode precisar preparar o modelo local e levar tempo; blocos já concluídos são reutilizados.
 
+### PDF e HTML clicáveis
+
+Em **Assuntos e tempos**, use **PDF clicável** ou **HTML clicável**. Esses documentos também ficam em **Arquivos de apoio**. Clicar no título do assunto ou no horário abre o Bili Studio já no trecho escolhido. O aplicativo pode estar fechado: o instalador registra o protocolo `bilistudio` no Windows.
+
+É preciso manter o aplicativo instalado e a biblioteca no mesmo perfil. O documento não contém o vídeo nem um caminho pessoal: os links usam o ID do vídeo no histórico. Renomeações feitas pelo programa mantêm o ID. Copiar apenas o PDF para outro computador não transfere os vídeos ou a biblioteca. Leitores PDF e navegadores podem pedir confirmação ou bloquear a abertura de aplicativos; não é necessário desativar proteções globais. Se seu leitor não abrir o link, use o HTML ou navegue por assuntos no aplicativo.
+
+Uma exportação de sumário existente não executa o modelo de IA novamente. Falhas de exportação preservam o sumário, o PDF anterior e os vídeos.
+
 ## Fechar, atualizar e recuperar
 
 Durante um trabalho, fechar a janela oferece continuar em segundo plano, manter a janela aberta ou pausar e sair. A bandeja do Windows permite reabrir a janela. Enquanto há trabalho, o aplicativo solicita que o Windows não suspenda automaticamente a sessão; isso termina quando a fila fica inativa.
