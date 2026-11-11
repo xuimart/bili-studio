@@ -1,5 +1,11 @@
 # Histórico
 
+## 4.1.2 — 2026-11-11
+
+- PDF principal do sumário ao lado do MP4 e SRT, com nome da playlist e caracteres seguros para Windows.
+- Sumário aceita poucos trechos instantâneos e pequenas sobras no fim de legendas antigas, sem modificar a fonte. Ajustes ficam registrados; grandes divergências continuam recusadas.
+- Sumários válidos e checkpoints anteriores são reaproveitados.
+
 ## 4.1.1 — 2026-11-11
 
 - Exporta sumário em PDF e HTML clicáveis, além do Markdown.

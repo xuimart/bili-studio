@@ -5,6 +5,14 @@ const {localRequest,requestWithRecovery}=require('./ollama-transport.cjs');
 const {loadState,createStateStore}=require('./state-store.cjs');
 const VERSION=2;
 function clock(seconds){const s=Math.max(0,Math.floor(seconds));return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(n=>String(n).padStart(2,'0')).join(':');}
+function summaryCues(cues,duration){
+ if(!Number.isFinite(duration)||duration<=0||!cues.length||cues.some((c,i)=>!Number.isFinite(c.start)||!Number.isFinite(c.end)||c.start<0||c.end<c.start||c.end>duration+10||i&&c.start<cues[i-1].start))throw Error('Tempos da legenda não correspondem ao vídeo.');
+ const adjustments={zeroDuration:0,afterVideo:0,clipped:0},result=[];
+ for(const cue of cues){if(cue.end===cue.start){adjustments.zeroDuration++;continue;}if(cue.start>=duration){adjustments.afterVideo++;continue;}if(cue.end>duration){adjustments.clipped++;result.push({...cue,end:duration});}else result.push(cue);}
+ if(adjustments.zeroDuration+adjustments.afterVideo>Math.max(3,Math.ceil(cues.length*.01)))throw Error('A legenda contém muitos trechos sem duração válida. Revise os tempos antes de gerar o sumário.');
+ if(!result.length)throw Error('Não há fala com duração válida dentro do vídeo.');
+ return {cues:result,adjustments};
+}
 function blocksFor(cues,duration,chapters=[]){
  if(!Number.isFinite(duration)||duration<=0)throw Error('Duração inválida para o sumário.');
  if(!cues.length||cues.some(c=>!Number.isFinite(c.start)||!Number.isFinite(c.end)||c.start<0||c.end<=c.start||c.end>duration+2))throw Error('Tempos da legenda não correspondem ao vídeo.');
@@ -53,9 +61,9 @@ function markdown(item,topics,duration){
 async function generateSummary(item,{signal,update=()=>{},generate,chapters,duration}={}){
  if(!item.subtitles?.srt||!fs.existsSync(item.subtitles.srt))throw Error('Gere a legenda antes do sumário.');
  const source=item.subtitles.alignedSrt&&fs.existsSync(item.subtitles.alignedSrt)?item.subtitles.alignedSrt:item.subtitles.srt;
- const content=fs.readFileSync(source,'utf8'),cues=parseDisplay(content);
+ const content=fs.readFileSync(source,'utf8');
  if(!duration){const info=await require('./media.cjs').probe(item.output,signal);duration=info.duration;chapters||=info.chapters;}
- const blocks=blocksFor(cues,duration,chapters||item.chapters||[]);
+ const {cues,adjustments}=summaryCues(parseDisplay(content),duration),blocks=blocksFor(cues,duration,chapters||item.chapters||[]);
  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({version:VERSION,content,duration,blocks:blocks.map(b=>[b.start,b.end])})).digest('hex');
  const folder=path.join(item.libraryRoot||path.dirname(item.output),'Arquivos de apoio');fs.mkdirSync(folder,{recursive:true});
  const base=path.join(folder,'Sumário-'+crypto.createHash('sha256').update(item.id).digest('hex').slice(0,12)),checkpoint=base+'.progress.json',saved=loadState(checkpoint);
@@ -71,7 +79,7 @@ async function generateSummary(item,{signal,update=()=>{},generate,chapters,dura
   }
  }finally{store.persist(true);store.close();}
  const topics=labels.map((label,i)=>({...label,start:blocks[i].start,end:blocks[i].end}));
- const result={version:VERSION,status:'done',fingerprint,duration,topics,markdown:base+'.md',json:base+'.json',model:model||saved.model||'local',createdAt:new Date().toISOString()};
+ const result={version:VERSION,status:'done',fingerprint,duration,topics,sourceAdjustments:adjustments,markdown:base+'.md',json:base+'.json',model:model||saved.model||'local',createdAt:new Date().toISOString()};
  write(result.markdown,markdown(item,topics,duration));write(result.json,JSON.stringify(result,null,2));update({phase:'Sumário por assuntos pronto',progress:100});return result;
 }
-module.exports={generateSummary,blocksFor,sample,validateLabel,labelBlock,clock};
+module.exports={generateSummary,blocksFor,summaryCues,sample,validateLabel,labelBlock,clock};
