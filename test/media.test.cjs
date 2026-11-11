@@ -5,11 +5,26 @@ const os = require('node:os');
 const path = require('node:path');
 const media = require('../media.cjs');
 const ffmpeg = path.resolve(__dirname, '../bin/ffmpeg.exe');
+
+test('faixa padrão é preservada quando a primeira faixa está silenciosa', {skip:!fs.existsSync(ffmpeg)},async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bili-default-audio-'));t.after(()=>{const real=fs.realpathSync(dir);assert.ok(real.startsWith(fs.realpathSync(os.tmpdir())+path.sep));assert.match(path.basename(real),/^bili-default-audio-/);fs.rmSync(real,{recursive:true,force:true});});
+ for(const ext of ['mkv','mp4']){
+ const file=path.join(dir,'multi-'+ext+'.'+ext);await media.execute(ffmpeg,['-v','error','-f','lavfi','-i','color=size=128x72:rate=24','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-f','lavfi','-i','sine=frequency=880:sample_rate=48000','-t','1','-map','0:v','-map','1:a','-map','2:a','-c:v','libx264','-c:a','aac','-disposition:a:0','0','-disposition:a:1','default',file]);
+ const before=await media.probe(file);assert.equal(before.audioCount,2);assert.equal(before.audio.disposition.default,1);assert.equal((await media.inspect(file)).audioSignal,true);
+ const output=await media.finalizeDownload(file),after=await media.probe(output);assert.equal(after.audioCount,1);assert.equal((await media.inspect(output)).audioSignal,true);
+ }
+});
 test('ranges de vídeo respeitam início, fim, sufixo e limites', () => {
   assert.deepEqual(media.parseRange('bytes=2-5', 10), { start: 2, end: 5 });
   assert.deepEqual(media.parseRange('bytes=-3', 10), { start: 7, end: 9 });
   assert.deepEqual(media.parseRange('bytes=5-', 10), { start: 5, end: 9 });
   for (const header of ['bytes=12-', 'bytes=9-3', 'bytes=0-1,3-4', 'bytes=-0']) assert.throws(() => media.parseRange(header, 10));
+});
+test('união de originais com várias faixas e resoluções diferentes mantém áudio padrão', {skip:!fs.existsSync(ffmpeg)},async t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bili-multi-merge-'));t.after(()=>{const real=fs.realpathSync(dir);assert.ok(real.startsWith(fs.realpathSync(os.tmpdir())+path.sep));assert.match(path.basename(real),/^bili-multi-merge-/);fs.rmSync(real,{recursive:true,force:true});});
+ const a=path.join(dir,'a.mkv'),b=path.join(dir,'b.mp4');await media.execute(ffmpeg,['-v','error','-f','lavfi','-i','color=size=128x72:rate=24','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-f','lavfi','-i','sine=frequency=880:sample_rate=48000','-t','1','-map','0:v','-map','1:a','-map','2:a','-c:v','libx264','-c:a','aac','-disposition:a:0','0','-disposition:a:1','default',a]);
+ await media.execute(ffmpeg,['-v','error','-f','lavfi','-i','color=size=256x144:rate=24','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','1','-c:v','libx264','-c:a','aac',b]);
+ const result=await media.merge([a,b].map((output,i)=>({id:String(i),index:i+1,title:'Aula',output})),'Várias faixas');assert.equal(result.media.audioSignal,true);assert.ok(Math.abs(result.duration-2)<.2);
 });
 test('concat e capítulos escapam nomes e preservam a ordem e os tempos', () => {
   assert.equal(media.concatLine("C:\\Vídeos\\Aula d'arte.mp4"), "file 'C:/Vídeos/Aula d'\\''arte.mp4'");

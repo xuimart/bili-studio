@@ -3,6 +3,7 @@ const { URL } = require('node:url');
 const HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36', Referer: 'https://www.bilibili.com/' };
 function normalizeUrl(value) {
   value=String(value).trim().replaceAll('&amp;','&');
+  if(/^(?:(?:www\.|m\.|space\.|player\.|t\.)?bilibili\.com|b23\.tv)(?:\/|$)/i.test(value))value='https://'+value;
   if (/^(?:BV[0-9A-Za-z]{10}|av\d+)$/.test(value)) value='https://www.bilibili.com/video/'+value+'/';
   let url;
   try { url = new URL(value); } catch { throw new Error('Cole um link ou identificador BV/AV do Bilibili.'); }
@@ -118,7 +119,8 @@ function makeExtractedLibrary(info,url){
     if(item.is_live||item.live_status==='is_live')throw Error('A lista contém uma transmissão ao vivo. Use uma coleção de vídeos gravados.');
     const raw=item.webpage_url||item.url||(/^BV[0-9A-Za-z]{10}$/.test(item.id||'')?'https://www.bilibili.com/video/'+item.id+'/':'');
     if(!raw)throw Error('Há um episódio sem endereço na lista. Não é seguro ignorá-lo; tente o link direto.');
-    const parsed=new URL(raw),normalized=normalizeUrl(raw),p=Number(parsed.searchParams.get('p'))||1;
+    const normalized=normalizeUrl(raw),parsed=new URL(/^https:\/\//i.test(raw)?raw:'https://'+raw),p=parsed.searchParams.has('p')?Number(parsed.searchParams.get('p')):1;
+    if(!Number.isSafeInteger(p)||p<1)throw Error('A lista contém uma parte de vídeo inválida.');
     const entryUrl=/\/video\//.test(normalized)?normalized+'?p='+p:normalized;
     if(seen.has(entryUrl))continue;seen.add(entryUrl);
     entries.push({id:'entry-'+require('node:crypto').createHash('sha256').update(entryUrl).digest('hex').slice(0,20),bvid:String(item.id||entries.length+1).replace(/[^\w-]/g,'_'),page:p,index:entries.length+1,title:String(item.title||item.id||'Episódio'),duration:Number(item.duration)||0,url:entryUrl});

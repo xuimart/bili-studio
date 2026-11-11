@@ -22,6 +22,7 @@ O backend escuta exclusivamente em `127.0.0.1`, em porta aleatória no desktop. 
 | `translate.cjs` / `ollama-transport.cjs` | Tradução local, validação de JSON/texto, retries e checkpoints |
 | `subtitle-delivery.cjs` | Disponibilidade de legenda, importação de recuperação validada e organização de fontes/alinhamentos |
 | `library-files.cjs` | Nomes finais, episódios separados, arquivos de apoio, migração e diário de movimentos |
+| `topic-summary.cjs` | Sumário por assuntos, referências verificadas, tempos da fonte e retomada por bloco |
 | `captions.cjs` / `caption-compact.cjs` | Divisão, linhas, duração e compacidade da legenda de exibição |
 | `state-store.cjs` | Snapshots temporários, salvamento recuperável e tolerância a arquivo bloqueado |
 
@@ -50,6 +51,12 @@ Atualizações e desinstalação não removem os dados do perfil nem os vídeos.
 ## Tradução
 
 Ollama usa uma instância local em `127.0.0.1:11435`, sem alterar a configuração do serviço padrão em `11434`. Modelos instalados são reutilizados; o primeiro preparo automático usa Qwen2.5 3B. A tradução valida caracteres latinos, IDs, completude de JSON e repetições. Quatro workers usam contexto fixo e transporte HTTP com conexões novas e recuperação limitada. A transcrição e a tradução completas não são substituídas pela versão concisa de exibição.
+
+## Sumário
+
+Depois de uma união com legenda, o fluxo pode chamar `generateSummary`. O modelo local recebe até 4.200 caracteres de parágrafos amostrados por bloco; capítulos e pausas longas delimitam os grupos, com máximo aproximado de oito minutos. O modelo gera somente rótulos, descrição e ID de referência. Tempos são derivados do SRT e limitados pela duração real do vídeo; a citação é copiada pelo programa e validada na fonte. Não interpreta imagens nem garante fronteiras semânticas exatas.
+
+`topicSummary` publica o resultado completo; `topicSummaryStatus` e `topicSummaryError` registram o andamento e conservam um resultado anterior. Markdown/JSON/checkpoints ficam em Arquivos de apoio, com nome estável por exportação. Fingerprint inclui conteúdo, versão do algoritmo, duração e blocos. Cache inválido é refeito por bloco, sem descartar os outros. Falha automática mantém vídeo e legenda prontos; `/api/summary` permite geração/retomada e download. O renderer usa `textContent` e tempos numéricos do servidor para navegar no player.
 
 ## Limites
 

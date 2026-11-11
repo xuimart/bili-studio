@@ -21,10 +21,11 @@ function execute(exe, args, { signal, onLine = () => {}, cwd } = {}) {
   });
 }
 async function probe(file, signal) {
-  const { stdout } = await execute(FFPROBE, ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', file], { signal });
-  const data = JSON.parse(stdout); const video = data.streams.find(s => s.codec_type === 'video'), audio = data.streams.find(s => s.codec_type === 'audio');
-  return { video, audio, duration: Number(data.format?.duration) || 0, size: Number(data.format?.size) || 0 };
+  const { stdout } = await execute(FFPROBE, ['-v', 'error', '-show_streams', '-show_format', '-show_chapters', '-of', 'json', file], { signal });
+  const data = JSON.parse(stdout); const video = data.streams.find(s => s.codec_type === 'video'), audios=data.streams.filter(s=>s.codec_type==='audio'),audio=audios.find(s=>s.disposition?.default===1)||audios[0];
+  return { video, audio, audioCount:audios.length,chapters:data.chapters||[],duration: Number(data.format?.duration) || 0, size: Number(data.format?.size) || 0 };
 }
+function audioMap(info){return Number.isInteger(info.audio?.index)?'0:'+info.audio.index:'0:a:0';}
 async function inspect(file, { signal, volume = true } = {}) {
   const info = await probe(file, signal);
   if (!info.video) throw new Error('O arquivo não contém vídeo. Retome este episódio para baixar novamente.');
@@ -32,7 +33,7 @@ async function inspect(file, { signal, volume = true } = {}) {
   if (!info.duration) throw new Error('O arquivo está incompleto ou não tem duração válida.');
   let peakDb = null, meanDb = null;
   if (volume) {
-    const { stderr } = await execute(FFMPEG, ['-hide_banner', '-i', file, '-t', '30', '-map', '0:a:0', '-vn', '-af', 'volumedetect', '-f', 'null', 'NUL'], { signal });
+    const { stderr } = await execute(FFMPEG, ['-hide_banner', '-i', file, '-t', '30', '-map', audioMap(info), '-vn', '-af', 'volumedetect', '-f', 'null', 'NUL'], { signal });
     peakDb = Number(stderr.match(/max_volume:\s*([\d.-]+) dB/)?.[1]);
     meanDb = Number(stderr.match(/mean_volume:\s*([\d.-]+) dB/)?.[1]);
     if (!Number.isFinite(peakDb)) peakDb = null;
@@ -55,18 +56,18 @@ function playbackPlan(info) {
 }
 async function finalizeDownload(file,{signal,update=()=>{}}={}) {
   const info=await probe(file,signal),plan=playbackPlan(info);
-  if(/\.mp4$/i.test(file)&&plan.copyVideo&&plan.copyAudio)return file;
+  if(/\.mp4$/i.test(file)&&plan.copyVideo&&plan.copyAudio&&info.audioCount===1)return file;
   const output=file.replace(/\.[^.\\/]+$/,'')+'.mp4';
   const partial=output+'.preparando.mp4';
   const filter=plan.hdr?'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p':'scale=trunc(iw/2)*2:trunc(ih/2)*2';
   update({phase:plan.copyVideo&&plan.copyAudio?'Preparando MP4 sem reconverter':'Convertendo para MP4 compatível com áudio',progress:0});
-  await execute(FFMPEG,['-v','error','-i',file,'-map','0:v:0','-map','0:a:0',...(plan.copyVideo?['-c:v','copy']:['-vf',filter,'-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p']),...(plan.copyAudio?['-c:a','copy']:['-c:a','aac','-b:a','192k']),'-map_metadata','0','-disposition:a:0','default','-movflags','+faststart','-progress','pipe:1','-nostats','-y',partial],{signal,onLine:ffProgress(info.duration,p=>update({progress:p}))});
+  await execute(FFMPEG,['-v','error','-i',file,'-map','0:v:0','-map',audioMap(info),...(plan.copyVideo?['-c:v','copy']:['-vf',filter,'-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p']),...(plan.copyAudio?['-c:a','copy']:['-c:a','aac','-b:a','192k']),'-map_metadata','0','-disposition:a:0','default','-movflags','+faststart','-progress','pipe:1','-nostats','-y',partial],{signal,onLine:ffProgress(info.duration,p=>update({progress:p}))});
   const verified=await inspect(partial,{signal});
   if(Math.abs(verified.duration-info.duration)>Math.max(1,info.duration*.005))throw Error('A duração mudou ao preparar o MP4. O download original foi preservado.');
   // Never overwrite an existing final file without validating it first.
   if(fs.existsSync(output)&&output!==file){
     let reusable=false;
-    try{const previous=await probe(output,signal),oldPlan=playbackPlan(previous);reusable=oldPlan.copyVideo&&oldPlan.copyAudio&&Math.abs(previous.duration-info.duration)<Math.max(.3,info.duration*.001);await inspect(output,{signal});}catch(e){if(signal?.aborted)throw e;}
+    try{const previous=await probe(output,signal),oldPlan=playbackPlan(previous);reusable=info.audioCount===1&&previous.audioCount===1&&oldPlan.copyVideo&&oldPlan.copyAudio&&Math.abs(previous.duration-info.duration)<Math.max(.3,info.duration*.001);await inspect(output,{signal});}catch(e){if(signal?.aborted)throw e;}
     if(reusable){fs.unlinkSync(partial);return output;}
     fs.renameSync(output,output+'.anterior-'+Date.now());
   }
@@ -86,7 +87,7 @@ function chapterMetadata(items) {
   return lines.join('\n') + '\n';
 }
 function compatible(items) {
-  const signature = x => JSON.stringify([x.video?.codec_name, x.video?.profile, x.video?.width, x.video?.height, x.video?.pix_fmt, x.video?.r_frame_rate, x.video?.time_base, x.audio?.codec_name, x.audio?.sample_rate, x.audio?.channels, x.audio?.channel_layout]);
+  const signature = x => JSON.stringify([x.video?.codec_name, x.video?.profile, x.video?.width, x.video?.height, x.video?.pix_fmt, x.video?.r_frame_rate, x.video?.time_base, x.audio?.codec_name, x.audio?.sample_rate, x.audio?.channels, x.audio?.channel_layout,x.audio?.index]);
   return items.every(x => signature(x) === signature(items[0]));
 }
 function ffProgress(duration, callback) {
@@ -114,7 +115,9 @@ async function merge(items, title, { signal, update = () => {} } = {}) {
     const info = await probe(item.output, signal); if (!info.video || !info.audio) throw new Error(`O episódio ${item.index} precisa de vídeo e áudio antes de juntar.`); infos.push(info);
   }
   const total = infos.reduce((s, i) => s + i.duration, 0); let files = items.map(i => i.output);
+  let concatAudio=audioMap(infos[0]);
   if (!compatible(infos)) {
+    concatAudio='0:a:0';
     update({ phase: 'Padronizando os episódios para unir sem falhas', progress: 0 }); files = [];
     const {width,height,fps,parts}=normalizationPlan(infos);
     for (let i = 0; i < items.length; i++) {
@@ -124,7 +127,7 @@ async function merge(items, title, { signal, update = () => {} } = {}) {
       const audioArgs=parts[i].copyAudio?['-c:a','copy']:['-c:a','aac','-b:a','192k','-ar','48000','-ac','2'];
       const phase=(parts[i].copyVideo?'Copiando vídeo sem reconverter':'Padronizando vídeo')+` · episódio ${i+1} de ${items.length}`;
       update({phase,progress:i/items.length*80});
-      await execute(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-i', items[i].output, '-map', '0:v:0', '-map', '0:a:0', ...videoArgs,...audioArgs, '-video_track_timescale', '90000', '-disposition:a:0', 'default', '-progress', 'pipe:1', '-nostats', '-y', file], { signal, onLine: ffProgress(infos[i].duration, p => update({phase,progress:(i+p/100)/items.length*80})) });
+      await execute(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-i', items[i].output, '-map', '0:v:0', '-map', audioMap(infos[i]), ...videoArgs,...audioArgs, '-video_track_timescale', '90000', '-disposition:a:0', 'default', '-progress', 'pipe:1', '-nostats', '-y', file], { signal, onLine: ffProgress(infos[i].duration, p => update({phase,progress:(i+p/100)/items.length*80})) });
       files.push(file);
     }
   }
@@ -133,7 +136,7 @@ async function merge(items, title, { signal, update = () => {} } = {}) {
   fs.writeFileSync(metadata, chapterMetadata(items.map((item, i) => ({ title: item.title, duration: infos[i].duration }))));
   const partial = path.join(work, 'combined.mp4');
   update({ phase: 'Juntando vídeo, áudio e capítulos', progress: 80 });
-  await execute(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-fflags', '+genpts', '-f', 'concat', '-safe', '0', '-i', manifest, '-f', 'ffmetadata', '-i', metadata, '-map', '0:v:0', '-map', '0:a:0', '-map_metadata', '1', '-map_chapters', '1', '-c', 'copy', '-disposition:a:0', 'default', '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', '-y', partial], { signal, onLine: ffProgress(total, p => update({ phase: 'Criando o MP4 completo', progress: 80 + p * .17 })) });
+  await execute(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-fflags', '+genpts', '-f', 'concat', '-safe', '0', '-i', manifest, '-f', 'ffmetadata', '-i', metadata, '-map', '0:v:0', '-map', concatAudio, '-map_metadata', '1', '-map_chapters', '1', '-c', 'copy', '-disposition:a:0', 'default', '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', '-y', partial], { signal, onLine: ffProgress(total, p => update({ phase: 'Criando o MP4 completo', progress: 80 + p * .17 })) });
   const verification = await inspect(partial, { signal });
   if (Math.abs(verification.duration - total) > Math.max(2, items.length * .15)) throw new Error('A duração do vídeo unido não corresponde à soma dos episódios. Os originais foram preservados.');
   const {titleStem}=require('./library-files.cjs');

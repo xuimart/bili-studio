@@ -1,5 +1,14 @@
 # Histórico
 
+## 4.1.0 — 2026-11-11
+
+- Sumário por assuntos depois da união e da legenda: títulos, descrições e tempos reais, com navegação pelo player e download Markdown.
+- Opção para desligar a geração automática e botão para gerar/retomar sumários de vídeos já prontos. Preserva o progresso por bloco, referências à legenda e o resultado anterior.
+- Falha no sumário não invalida vídeo ou legenda; arquivos ficam em Arquivos de apoio.
+- Corrige escolha de áudio quando a primeira faixa é silenciosa e a faixa padrão tem som, inclusive em conversão e união com padronização.
+- Reconhece links sem protocolo de domínios permitidos e identificadores BV retornados pelo extrator; recusa partes inválidas.
+- Matriz ampliada: 26 verificações de mídia, 10 consultas reais de links e uma amostra real de download com áudio. 136 testes automatizados.
+
 ## 4.0.4 — 2026-11-11
 
 - A pasta da playlist deixa à vista o vídeo unido e seu SRT com o mesmo nome da playlist, sem nomes genéricos ou data no arquivo final.
