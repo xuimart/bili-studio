@@ -94,7 +94,7 @@ function ffProgress(duration, callback) {
   return line => { const match = line.match(/^out_time_us=(\d+)/); if (match && duration) callback(Math.min(99, Number(match[1]) / 1000000 / duration * 100)); };
 }
 function mergeKey(items) {
-  return crypto.createHash('sha256').update(JSON.stringify({version:2,sources:items.map(i=>{const s=fs.statSync(i.output);return [path.resolve(i.output),s.size,s.mtimeMs];})})).digest('hex').slice(0,24);
+  return crypto.createHash('sha256').update(JSON.stringify({version:3,sources:items.map(i=>{const s=fs.statSync(i.output);return [path.resolve(i.output),s.size,s.mtimeMs];})})).digest('hex').slice(0,24);
 }
 function normalizationPlan(infos) {
   const width=Math.min(1920,Math.max(...infos.map(i=>i.video.width))),height=Math.min(1080,Math.max(...infos.map(i=>i.video.height)));
