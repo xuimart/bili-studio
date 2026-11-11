@@ -20,6 +20,12 @@ async function fixture(t, extra = {}) {
   return { app, request, dataDir, origin };
 }
 async function idle(app) { const deadline = Date.now() + 3000; while (app.state.busy && Date.now() < deadline) await new Promise(r => setTimeout(r, 10)); assert.equal(app.state.busy, false); }
+test('sumário exporta PDF e HTML pelo desktop sem chamar novamente o modelo',async t=>{
+ let calls=0;const {app,request,dataDir}=await fixture(t,{exportSummaryDocuments:async item=>{calls++;item.topicSummary.pdf=path.join(dataDir,'summary.pdf');item.topicSummary.html=path.join(dataDir,'summary.html');fs.writeFileSync(item.topicSummary.pdf,'%PDF-1.7\nfixture');fs.writeFileSync(item.topicSummary.html,'<a href="bilistudio://watch/export-doc?t=1.000">Assunto</a>');}});
+ const output=path.join(dataDir,'doc.mp4');fs.writeFileSync(output,'fixture');app.state.exports.push({id:'export-doc',status:'done',type:'merged',title:'Aula',output,sourceIds:[],topicSummary:{duration:10,topics:[{start:1,end:5,title:'Assunto',description:'Conteúdo'}]}});
+ const pdf=await request('/api/summary?id=export-doc&format=pdf&download=1');assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf');assert.match(pdf.headers.get('content-disposition'),/attachment/);assert.match(await pdf.text(),/%PDF/);
+ const html=await request('/api/summary?id=export-doc&format=html&download=1');assert.match(await html.text(),/bilistudio:\/\/watch\/export-doc/);assert.equal(calls,2);assert.equal((await request('/api/summary?id=export-doc&format=exe')).status,400);
+});
 test('sumário usa legenda pronta, permite baixar Markdown e falha isolada não invalida legenda',async t=>{
  let calls=0,fail=false;const {app,request,dataDir}=await fixture(t,{generateSummary:async()=>{calls++;if(fail)throw Error('modelo de teste indisponível');const markdown=path.join(dataDir,'summary.md');fs.writeFileSync(markdown,'# Assunto\n00:00:01 · Proporção');return{markdown,topics:[{start:1,end:2,title:'Proporção',description:'Estudo das proporções.'}],fingerprint:'fixture'};}});
  const output=path.join(dataDir,'merged.mp4'),srt=path.join(dataDir,'captions.srt');fs.writeFileSync(output,'fixture');fs.writeFileSync(srt,'1\n00:00:01,000 --> 00:00:02,000\nProporção.\n');

@@ -168,7 +168,9 @@ function createApp(options = {}) {
         currentCaption=null;
         if(hasSummary)for(const item of captionItems.filter(i=>i.type==='merged')){
           item.topicSummaryStatus='running';item.topicSummaryError='';update({currentId:item.id,currentTitle:item.title});persist(true);
-          try{item.topicSummary=await(options.generateSummary||generateSummary)(item,{signal,update:stageUpdate('summary',type==='summary'?0:85,100)});item.topicSummaryStatus='done';}
+          try{item.topicSummary=await(options.generateSummary||generateSummary)(item,{signal,update:stageUpdate('summary',type==='summary'?0:85,100)});item.topicSummaryStatus='done';
+            if(options.exportSummaryDocuments)try{update({phase:'Preparando PDF e HTML clicáveis'});await options.exportSummaryDocuments(item);}catch(error){log('Sumário pronto; PDF pode ser gerado novamente ao baixar: '+error.message,'warning');}
+          }
           catch(error){item.topicSummaryStatus=signal.aborted?'paused':'error';item.topicSummaryError=error.message;if(type==='summary'||signal.aborted)throw error;log('Vídeo e legenda prontos. Sumário precisa ser retomado: '+error.message,'warning');}
           persist(true);
         }
@@ -408,7 +410,12 @@ function createApp(options = {}) {
       const item = [...state.jobs, ...state.exports].findLast(j => j.id === url.searchParams.get('id'));
       if (!item || item.status !== 'done') return send(404, { error: 'Vídeo ainda não disponível.' });
       let file, mime;
-      if(url.pathname==='/api/summary'){file=item.topicSummary?.markdown;mime='text/markdown; charset=utf-8';}
+      if(url.pathname==='/api/summary'){
+        const format=url.searchParams.get('format')||'markdown',types={markdown:'text/markdown; charset=utf-8',html:'text/html; charset=utf-8',pdf:'application/pdf'};
+        if(!types[format])return send(400,{error:'Formato de sumário inválido.'});
+        if(format!=='markdown')try{if(!item.topicSummary)return send(409,{error:'Gere o sumário primeiro.'});if(format==='pdf'&&!options.exportSummaryDocuments)return send(409,{error:'Abra o aplicativo Bili Studio instalado para exportar o PDF.'});await(options.exportSummaryDocuments||require('./summary-document.cjs').exportSummaryDocuments)(item);persist(true);}catch(error){return send(400,{error:'Não foi possível preparar o documento: '+error.message});}
+        file=item.topicSummary?.[format];mime=types[format];
+      }
       if (url.pathname === '/api/media') { if (!item.media?.audioVerified) return send(409, { error: 'O áudio deste vídeo ainda está sendo verificado.' }); file = item.output; mime = 'video/mp4'; }
       if (url.pathname === '/api/thumbnail') { file = item.thumbnail; mime = 'image/jpeg'; }
       if (url.pathname === '/api/subtitle') { const delivery=subtitleDelivery(item,state);if(!delivery.ready)return send(409,{error:delivery.notice});const format = url.searchParams.get('format') || 'vtt'; if (!['vtt', 'srt', 'txt'].includes(format)) return send(400, { error: 'Formato inválido.' }); file = item.subtitles?.[format]; mime = format === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8'; }
