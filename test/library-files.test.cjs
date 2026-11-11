@@ -53,3 +53,12 @@ test('resultados antigos gerados pelo programa também são guardados quando sa�
  organizeLibraries(f.state,f.data);assert.equal(fs.readFileSync(path.join(f.root,'Arquivos de apoio','Versões anteriores',name+'.mp4'),'utf8'),'old merged');
  assert.equal(fs.readFileSync(path.join(f.root,'Arquivos de apoio',name+'.whisper-1.pt-BR.srt'),'utf8'),'old subtitle');assert.ok(!fs.readdirSync(f.root).some(n=>n.startsWith('Videos-unidos')));
 });
+test('encurtar nome longo mantém a extensão de checkpoint e a retomada',t=>{
+ const f=fixture(t),checkpoint=f.write('Videos-unidos-2.'+'a'.repeat(155)+'.pt-BR.progress.json','{"translated":[1]}');f.item.translationCheckpointFile=checkpoint;
+ organizeLibraries(f.state,f.data);assert.ok(f.item.translationCheckpointFile.endsWith('.pt-BR.progress.json'));assert.ok(f.item.translationCheckpointFile.length<=240);
+ assert.equal(fs.readFileSync(captionBase(f.item)+'.progress.json','utf8'),'{"translated":[1]}');
+});
+test('checkpoint com nome encurtado por uma migração anterior é corrigido pelo diário',t=>{
+ const f=fixture(t);f.item.translationCheckpointFile=f.write('Arquivos de apoio/old-hash.json','{"translated":[2]}');
+ organizeLibraries(f.state,f.data);assert.ok(f.item.translationCheckpointFile.endsWith('.progress.json'));assert.equal(fs.readFileSync(captionBase(f.item)+'.progress.json','utf8'),'{"translated":[2]}');assert.equal(organizeLibraries(f.state,f.data).moved,0);
+});

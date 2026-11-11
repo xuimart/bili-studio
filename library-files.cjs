@@ -41,16 +41,16 @@ function assertLocal(root, file) {
 }
 function available(file) {
   if (!fs.existsSync(file)) return file;
-  const ext = path.extname(file), base = file.slice(0, -ext.length || undefined);
+  const ext = file.endsWith('.progress.json')?'.progress.json':path.extname(file), base = file.slice(0, -ext.length || undefined);
   for (let i=2; ; i++) { const next = base + ` (${i})` + ext; if (!fs.existsSync(next)) return next; }
 }
 function supportTarget(root, file, section = '') {
   const dir = path.join(root, SUPPORT, section), name = path.basename(file);
   // Preserve the complete old name unless the full path would be too long.
   if (path.join(dir, name).length <= 240) return path.join(dir, name);
-  const ext = path.extname(name).slice(0, 12);
+  const ext = name.match(/\.(?:pt-BR\.)?(?:progress\.json|readability-cache\.json|readability\.json|display-aligned\.srt|aligned\.srt)$/i)?.[0] || path.extname(name).slice(0, 12);
   const hash = crypto.createHash('sha256').update(file).digest('hex').slice(0, 10);
-  return path.join(dir, safeName(name, Math.max(20, 220-dir.length)) + '-' + hash + ext);
+  return path.join(dir, safeName(name.slice(0,-ext.length||undefined), Math.max(12,235-dir.length-hash.length-ext.length)) + '-' + hash + ext);
 }
 
 function organizeLibraries(state, dataDir, {persist = () => {}} = {}) {
@@ -117,6 +117,10 @@ function organizeLibraries(state, dataDir, {persist = () => {}} = {}) {
         const checkpoints=fs.readdirSync(root).filter(n=>n.endsWith('.pt-BR.progress.json')&&[...oldStems].some(s=>n.startsWith(s+'.'))).map(n=>path.join(root,n));
         checkpoints.sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs);
         if(checkpoints.length)latest.translationCheckpointFile=checkpoints[0];
+      }
+      if(latest.translationCheckpointFile && !latest.translationCheckpointFile.endsWith('.progress.json') && fs.existsSync(latest.translationCheckpointFile)){
+        const hash=crypto.createHash('sha256').update(latest.id).digest('hex').slice(0,10);
+        move(root,latest.translationCheckpointFile,path.join(root,SUPPORT,`Tradução-${hash}.pt-BR.progress.json`));
       }
       for(const job of allJobs) if(job.output)oldStems.add(path.basename(job.output,path.extname(job.output)));
       // Previous assembled versions stay recoverable but don't compete with the current result.
