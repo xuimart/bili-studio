@@ -16,7 +16,7 @@ Em **Legenda automática**, escolha detecção automática do áudio ou o idioma
 
 Na primeira solicitação, o programa prepara o Whisper base (aproximadamente 148 MB) e, para mandarim, o small (aproximadamente 488 MB). A tradução prepara o Ollama e um modelo Qwen, cujo download pode consumir vários GB. O progresso dessa preparação aparece como parte do processamento. Downloads exigem conexão; o processamento posterior é local. O tempo depende da duração do áudio, CPU, RAM e GPU.
 
-SRT e VTT de exibição ficam junto ao vídeo. A transcrição de origem fica em **Legendas originais**, e os alinhamentos completos em **Dados da legenda**, para não serem escolhidos automaticamente como legenda final. A versão PT-BR de exibição usa até duas linhas de 42 caracteres, blocos de até seis segundos e reescrita mais concisa quando necessário. A versão `aligned.srt` preserva a tradução completa. A divisão de tempos dentro de um trecho reconhecido é automática e aproximada; não equivale a alinhamento de cada palavra. Nomes, conteúdo técnico, traduções e sincronização ainda podem precisar de revisão humana. Se o player já estiver aberto, recarregue a legenda ou reabra o vídeo.
+O SRT de exibição fica junto ao vídeo, com o mesmo nome. VTT, TXT, transcrição de origem, alinhamentos completos, checkpoints e versões anteriores ficam em **Arquivos de apoio**. A versão PT-BR de exibição usa até duas linhas de 42 caracteres, blocos de até seis segundos e reescrita mais concisa quando necessário. A versão `aligned.srt` preserva a tradução completa. A divisão de tempos dentro de um trecho reconhecido é automática e aproximada; não equivale a alinhamento de cada palavra. Nomes, conteúdo técnico, traduções e sincronização ainda podem precisar de revisão humana. Se o player já estiver aberto, recarregue a legenda ou reabra o vídeo.
 
 Se a tradução falhar, o vídeo pode estar pronto enquanto a legenda portuguesa ainda precisa ser retomada. O programa preserva a transcrição e mostra a pendência; não ativa a faixa chinesa no lugar do português. Retomar reaproveita o trabalho salvo. Uma legenda PT já pronta continua disponível enquanto uma nova tentativa é feita.
 
@@ -25,6 +25,25 @@ Se um player externo continuar mostrando chinês, selecione o SRT com o mesmo no
 ## União
 
 Ative **Juntar em um único vídeo** para criar um MP4 por biblioteca. A ordem segue os episódios selecionados. O programa usa cópia direta quando possível e normaliza somente o necessário quando áudio, dimensões ou taxas de quadros diferem. Verifica áudio e duração antes de concluir. Os episódios individuais permanecem disponíveis. Uma falha preserva originais e partes reaproveitáveis.
+
+Depois da união, a pasta fica assim:
+
+```text
+Nome da playlist [identificador]/
+  Nome da playlist.mp4
+  Nome da playlist.srt
+  Episódios/
+    001 - Primeiro episódio.mp4
+    002 - Segundo episódio.mp4
+  Arquivos de apoio/
+    Legendas originais/
+    Dados da legenda/
+    ...checkpoints e versões anteriores
+```
+
+Sem união, os episódios continuam sendo os arquivos principais; cada SRT acompanha seu MP4. O título é preservado, inclusive acentos e caracteres chineses. Caracteres proibidos pelo Windows são substituídos por `_`; nomes reservados e caminhos longos são ajustados. Colisões recebem um sufixo numérico sem sobrescrever arquivos existentes.
+
+Bibliotecas antigas são organizadas automaticamente com o aplicativo ocioso. Os episódios, fontes e backups são movidos, não reconvertidos nem apagados, e os caminhos do histórico são atualizados. Feche o vídeo no player externo para liberar arquivos bloqueados. A organização usa um diário de movimentos e salva um backup de `state.json` no perfil; restaurar só um estado antigo não desfaz movimentos de arquivos.
 
 ## Fechar, atualizar e recuperar
 

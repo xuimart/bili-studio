@@ -127,8 +127,9 @@ function makeExtractedLibrary(info,url){
   return {id:'list-'+require('node:crypto').createHash('sha256').update(url).digest('hex').slice(0,16),title:String(info.title||entries[0].title),author:String(info.uploader||''),source:url,kind:entries.length>1?'Biblioteca':'Vídeo',entries,duration:entries.reduce((s,e)=>s+e.duration,0)};
 }
 function safeName(value, max = 85) {
-  let name = String(value).normalize('NFC').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').trim().slice(0, max).replace(/[. ]+$/, '');
-  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) name = '_' + name;
+  let name = String(value).normalize('NFC').replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_').trim();
+  name = name.slice(0, max).replace(/[\uD800-\uDBFF]$/, '').replace(/[. ]+$/, '');
+  if (/^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(name)) name = '_' + name;
   return name || 'Bilibili';
 }
 module.exports = { normalizeUrl, initialState, makeLibrary, discover, safeName, cookieHeader,resolveShortLink,makeExtractedLibrary };

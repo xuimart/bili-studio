@@ -38,7 +38,9 @@ function preview(item){
 function render(next,first=false){
  const finished=state&&((state.operation?.status==='running'&&next.operation?.status==='done')||(state.workflow?.status==='downloading'&&next.workflow?.status==='done')||(state.linkQueue||[]).some(q=>q.status==='running'&&next.linkQueue?.find(n=>n.id===q.id)?.status==='done'));
  if(finished)notify('Pronto. Os arquivos estão na pasta escolhida e em Histórico e arquivos prontos.');
- state=next;setText('connection','● Neste computador');$('save-warning').hidden=!state.persistenceWarning;if(state.persistenceWarning)setText('save-warning',state.persistenceWarning);
+ state=next;setText('connection','● Neste computador');
+ const organizationWarning=state.fileOrganization?.warnings?.length?'Alguns arquivos não puderam ser organizados. Feche os vídeos em outros programas e reabra o Bili Studio para tentar novamente.':'';
+ const warning=[state.persistenceWarning,organizationWarning].filter(Boolean).join(' ');$('save-warning').hidden=!warning;if(warning)setText('save-warning',warning);
  if(first){$('url').value=state.url;$('folder').value=state.folder;$('quality').value=state.quality;$('cookies').value=state.cookieFile||'';const p=state.processingPrefs||{};$('with-subtitles').checked=p.subtitles??true;$('with-merge').checked=p.merge??false;$('source-language').value=p.language||'auto';$('subtitle-language').value=p.subtitleLanguage||'pt';}
  const entries=state.library?.entries||[], key=JSON.stringify(entries.map(e=>[e.id,e.title]));
  if(key!==libraryKey){libraryKey=key;selected=new Set(entries.map(e=>e.id));rows.clear();$('episodes').replaceChildren();

@@ -19,6 +19,7 @@ files:
   - speech.cjs
   - translate.cjs
   - subtitle-delivery.cjs
+  - library-files.cjs
   - ollama-transport.cjs
   - captions.cjs
   - caption-compact.cjs

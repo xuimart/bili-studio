@@ -136,13 +136,15 @@ async function merge(items, title, { signal, update = () => {} } = {}) {
   await execute(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-fflags', '+genpts', '-f', 'concat', '-safe', '0', '-i', manifest, '-f', 'ffmetadata', '-i', metadata, '-map', '0:v:0', '-map', '0:a:0', '-map_metadata', '1', '-map_chapters', '1', '-c', 'copy', '-disposition:a:0', 'default', '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', '-y', partial], { signal, onLine: ffProgress(total, p => update({ phase: 'Criando o MP4 completo', progress: 80 + p * .17 })) });
   const verification = await inspect(partial, { signal });
   if (Math.abs(verification.duration - total) > Math.max(2, items.length * .15)) throw new Error('A duração do vídeo unido não corresponde à soma dos episódios. Os originais foram preservados.');
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
-  const output = path.join(path.dirname(items[0].output), `Videos-unidos-${items.length}-episodios-${stamp}.mp4`);
+  const {titleStem}=require('./library-files.cjs');
+  const root=items[0].target||path.dirname(items[0].output),stem=titleStem(root,title);
+  let output=path.join(root,stem+'.mp4');
+  for(let n=2;fs.existsSync(output);n++)output=path.join(root,stem+` (${n}).mp4`);
   fs.copyFileSync(partial, output, fs.constants.COPYFILE_EXCL);
   // Only remove disposable files created for this operation, never source media.
   for (const file of [partial, manifest, metadata]) { try { if (fs.existsSync(file)) fs.unlinkSync(file); } catch {} }
   try { fs.rmdirSync(work); } catch {}
-  return { id: 'export-' + crypto.randomUUID(), title: title + ' · ' + items.length + ' episódios', output, status: 'done', type: 'merged', sourceIds: items.map(i => i.id), media: verification, duration: verification.duration, createdAt: new Date().toISOString() };
+  return { id: 'export-' + crypto.randomUUID(), title: title + ' · ' + items.length + ' episódios', playlistTitle:title,libraryRoot:root, output, status: 'done', type: 'merged', sourceIds: items.map(i => i.id), media: verification, duration: verification.duration, createdAt: new Date().toISOString() };
 }
 async function transcribe(item, language, options = {}) { return require('./speech.cjs').transcribe(item,language,options); }
 async function detectSpeechLanguage(item, options = {}) { return require('./speech.cjs').detectSpeechLanguage(item,options); }

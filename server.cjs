@@ -12,6 +12,7 @@ const { loadState, createStateStore } = require('./state-store.cjs');
 const { findEngine, MODEL } = require('./whisper.cjs');
 const { prefetch } = require('./fast-download.cjs');
 const {subtitleDelivery,applySubtitleRepairs}=require('./subtitle-delivery.cjs');
+const {organizeLibraries,captionBase}=require('./library-files.cjs');
 const {APP_ROOT:ROOT,DATA_DIR,BIN_DIR,DOWNLOAD_DIR}=require('./runtime-paths.cjs');
 const DEFAULT_URL = '';
 function launch(executable, args) { return spawn(executable, args, { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] }); }
@@ -70,6 +71,8 @@ function createApp(options = {}) {
   const store = createStateStore(stateFile, () => state, { onWarning: warning => { state.persistenceWarning = warning; } });
   const persist = store.persist;
   if(applySubtitleRepairs(state,dataDir))persist(true);
+  const organize = () => organizeLibraries(state,dataDir,{persist:()=>persist(true)});
+  organize();
   function log(message, type = 'info') { state.logs.push({ time: new Date().toISOString(), type, message: String(message).slice(0, 1300) }); state.logs = state.logs.slice(-100); persist(); }
   function publicState() {
     if(applySubtitleRepairs(state,dataDir))persist(true);
@@ -89,7 +92,7 @@ function createApp(options = {}) {
         try { if (!job.output || !fs.existsSync(job.output)) throw new Error('Arquivo não encontrado. Retome para baixar novamente.'); await inspectJob(job); }
         catch (error) { job.status = 'error'; job.error = error.message; log(error.message, 'error'); }
       }
-    } finally { state.auditing = false; persist(true); void pumpQueue(); }
+    } finally { state.auditing = false; organize(); persist(true); void pumpQueue(); }
   }
   function selectedFinished(ids, includeExports = false) {
     if (!Array.isArray(ids) || !ids.length) throw new Error('Selecione pelo menos um vídeo.');
@@ -148,7 +151,7 @@ function createApp(options = {}) {
             const original = reusable ? existing : await (options.transcribeMedia || media.transcribe)(item, language, { signal, update:stageUpdate('transcribe',captionStart,captionEnd) });
             item.subtitleSource=original;persist(true);
             if (processing.subtitleLanguage === 'pt' && original.language !== 'pt') {
-              item.subtitles = await (options.translateCaptions || translateCaptions)(original, { signal,outputBase:item.output.replace(/\.mp4$/i,'')+'.pt-BR',update:stageUpdate('translate',captionEnd,100) });
+              item.subtitles = await (options.translateCaptions || translateCaptions)(original, { signal,outputBase:captionBase(item),update:stageUpdate('translate',captionEnd,100) });
             }else item.subtitles=original;
             }
             if(item.subtitles?.srt && !options.transcribeMedia){
@@ -167,7 +170,7 @@ function createApp(options = {}) {
         if (type === 'workflow') state.workflow.status = signal.aborted ? 'cancelled' : 'error';
         update({ status: signal.aborted ? 'cancelled' : 'error', phase: signal.aborted ? 'Operação cancelada. Os vídeos originais foram preservados.' : error.message, error: signal.aborted ? '' : error.message });
         log(operation.phase, signal.aborted ? 'info' : 'error');
-      } finally { operationController = null; completeQueueItem(); persist(true); void pumpQueue(); }
+      } finally { operationController = null; completeQueueItem(); organize(); persist(true); void pumpQueue(); }
     })();
   }
   async function worker() {
@@ -342,7 +345,7 @@ function createApp(options = {}) {
           return;
         } catch(error) { item.status='error';item.error=error.message;log('Fila: '+error.message,'error');persist(true); }
       }
-    } finally { pumping=false;persist(true);if(state.queueEnabled && !state.busy && !state.auditing && state.operation?.status!=='running' && !closing) queueMicrotask(()=>void pumpQueue()); }
+    } finally { pumping=false;organize();persist(true);if(state.queueEnabled && !state.busy && !state.auditing && state.operation?.status!=='running' && !closing) queueMicrotask(()=>void pumpQueue()); }
   }
   function addQueue(body) {
     const settings=checkSettings(body),processing=processingOptions(body);
