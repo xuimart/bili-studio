@@ -118,7 +118,7 @@ async function start(){
   rendererReady=true;if(pendingLink){const link=pendingLink;pendingLink=null;void openDeepLink(link).catch(()=>{});}
   if(smoke){
     const deadline=Date.now()+30000;let dom;
-    do{dom=await win.webContents.executeJavaScript('({title:document.title,ready:document.querySelector("#connection")?.textContent,node:typeof require,apiReady:document.documentElement.dataset.ready==="true",folderValue:document.querySelector("#folder")?.value,urlInput:!!document.querySelector("#url"),folder:!!document.querySelector("#choose-folder"),queue:!!document.querySelector("#queue-start"),captions:!!document.querySelector("#with-subtitles"),merge:!!document.querySelector("#with-merge")})');if(dom.apiReady)break;await new Promise(r=>setTimeout(r,200));}while(Date.now()<deadline);
+    do{dom=await win.webContents.executeJavaScript('({title:document.title,ready:document.querySelector("#connection")?.textContent,node:typeof require,apiReady:document.documentElement.dataset.ready==="true",folderValue:document.querySelector("#folder")?.value,urlInput:!!document.querySelector("#url"),folder:!!document.querySelector("#choose-folder"),queue:!!document.querySelector("#queue-start"),captions:!!document.querySelector("#with-subtitles"),merge:!!document.querySelector("#with-merge"),dubbing:!!document.querySelector("#with-dubbing"),calibration:!!document.querySelector("#calibrate-voice")})');if(dom.apiReady)break;await new Promise(r=>setTimeout(r,200));}while(Date.now()<deadline);
     const playback=await win.webContents.executeJavaScript(`(async()=>{const v=document.createElement('video');v.muted=true;v.src='/api/media?id=smoke-media';document.body.append(v);await v.play();await new Promise(r=>setTimeout(r,700));const audio=await fetch(v.src).then(r=>r.arrayBuffer());const context=new OfflineAudioContext(1,48000,48000),buffer=await context.decodeAudioData(audio),samples=buffer.getChannelData(0);let peak=0;for(const s of samples)peak=Math.max(peak,Math.abs(s));const result={width:v.videoWidth,height:v.videoHeight,currentTime:v.currentTime,frames:v.getVideoPlaybackQuality().totalVideoFrames,decodedAudioFrames:buffer.length,peak};v.pause();v.remove();return result;})()`);
     if(playback.width!==256||playback.currentTime<=0||playback.frames<1||playback.peak<.001)throw Error('Falha de reprodução/áudio na janela: '+JSON.stringify(playback));
     const target=require('./deep-links.cjs').timeLink('export-smoke',.5);app.emit('second-instance',{},[process.execPath,target]);
@@ -128,7 +128,7 @@ async function start(){
     await win.webContents.executeJavaScript('document.querySelector("#preview-dialog").close()');
     backend.state.jobs=backend.state.jobs.filter(j=>j.id!=='smoke-media');
     const report={playback,deepLink,pdfLinks:true,version:app.getVersion(),packaged:app.isPackaged,electron:process.versions.electron,ownWindow:win instanceof BrowserWindow,storageOutsideInstall:!dataDir.startsWith(process.resourcesPath),...dom};
-    if(dom.node!=='undefined'||!dom.apiReady||!dom.folderValue||!dom.queue||!dom.urlInput)throw Error('A interface não ficou pronta: '+JSON.stringify(report));
+    if(dom.node!=='undefined'||!dom.apiReady||!dom.folderValue||!dom.queue||!dom.urlInput||!dom.dubbing||!dom.calibration)throw Error('A interface não ficou pronta: '+JSON.stringify(report));
     fs.writeFileSync(path.join(dataDir,'desktop-smoke.json'),JSON.stringify(report,null,2));
     fs.writeFileSync(path.join(dataDir,'desktop-smoke.png'),(await win.webContents.capturePage()).toPNG());
     await shutdown();

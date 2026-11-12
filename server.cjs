@@ -14,6 +14,7 @@ const { prefetch } = require('./fast-download.cjs');
 const {subtitleDelivery,applySubtitleRepairs}=require('./subtitle-delivery.cjs');
 const {organizeLibraries,captionBase}=require('./library-files.cjs');
 const {generateSummary}=require('./topic-summary.cjs');
+const dubbing=require('./dubbing.cjs');
 const {APP_ROOT:ROOT,DATA_DIR,BIN_DIR,DOWNLOAD_DIR}=require('./runtime-paths.cjs');
 const DEFAULT_URL = '';
 function launch(executable, args) { return spawn(executable, args, { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] }); }
@@ -72,11 +73,14 @@ function createApp(options = {}) {
   const ffmpeg = fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) ? BIN_DIR : 'ffmpeg';
   const store = createStateStore(stateFile, () => state, { onWarning: warning => { state.persistenceWarning = warning; } });
   const persist = store.persist;
+  for(const item of [...state.jobs,...state.exports])if(item.dubbingStatus==='running')item.dubbingStatus='paused';
+  if(dubbing.recoverDubs(state,dataDir))persist(true);
   if(applySubtitleRepairs(state,dataDir))persist(true);
   const organize = () => organizeLibraries(state,dataDir,{persist:()=>persist(true)});
   organize();
   function log(message, type = 'info') { state.logs.push({ time: new Date().toISOString(), type, message: String(message).slice(0, 1300) }); state.logs = state.logs.slice(-100); persist(); }
   function publicState() {
+    state.dubbingEngine=dubbing.ENGINE;state.dubbingMachine=dubbing.machine;
     if(applySubtitleRepairs(state,dataDir))persist(true);
     const project=item=>{const delivery=subtitleDelivery(item,state);return {...item,subtitleReady:delivery.ready,subtitleNotice:delivery.notice,subtitleStatus:delivery.status};};
     return { ...state, jobs:state.jobs.map(project),exports:state.exports.map(project),desktop:!!options.choosePath, tools: { downloader: fs.existsSync(ytdlp), ffmpeg: fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) || ffmpeg === 'ffmpeg', whisper: !!findEngine() && fs.existsSync(MODEL) }, summary: { total: state.jobs.length, done: state.jobs.filter(j => j.status === 'done').length, failed: state.jobs.filter(j => j.status === 'error').length } };
@@ -118,13 +122,19 @@ function createApp(options = {}) {
     const hasCaptions = type === 'subtitles' || (type === 'workflow' && processing.subtitles);
     const hasTranslation = hasCaptions && processing.subtitleLanguage === 'pt';
     const hasSummary = type==='summary'||hasCaptions&&processing.summary!==false;
+    const hasDubbing=type==='dubbing'||type==='workflow'&&processing.dubbing;
     const mergeEnd = hasCaptions ? 60 : 100;
     const captionStart = hasMerge ? mergeEnd : 0, captionEnd = hasTranslation ? 80 : 100;
-    const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:(from+(to-from)*(p.progress||0)/100)*(hasSummary&&stage!=='summary'?.85:1)});
+    const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:(from+(to-from)*(p.progress||0)/100)*(stage!=='summary'?(hasDubbing?.65:hasSummary?.85:1):1)});
     persist(true);
     void (async () => {
       let currentCaption=null;
       try {
+        if(type==='dubbing-calibration'){
+          operation.total=1;update({phase:'Preparando teste de velocidade · primeira preparação não conta na estimativa',stage:'dubbing-calibration'});
+          const result=await(options.calibrateDubbing||dubbing.calibrate)(processing.voice||'male',{signal,update:p=>update({...p,stageProgress:p.progress||0})});
+          (state.dubbingBenchmarks||={})[result.voice]=result;state.processingPrefs={...state.processingPrefs,voice:result.voice};update({status:'done',phase:'Teste de voz concluído. Estimativa deste computador atualizada.',progress:100,completed:1,completedAt:new Date().toISOString()});return;
+        }
         let captionItems = items;
         if (hasMerge) {
           const reusable = [...state.exports].reverse().find(e=>e.sourceIds?.length===items.length && e.sourceIds.every((id,i)=>id===items[i].id) && fs.existsSync(e.output) && items.every(i=>fs.statSync(i.output).mtimeMs<=fs.statSync(e.output).mtimeMs));
@@ -166,15 +176,20 @@ function createApp(options = {}) {
           }
         }
         currentCaption=null;
+        if(hasDubbing)for(const item of captionItems){
+          const from=type==='dubbing'?0:65,to=hasSummary?90:100;item.dubbingStatus='running';item.dubbingError='';update({currentId:item.id,currentTitle:item.title,stage:'dubbing',progress:from});persist(true);
+          try{item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:from+(to-from)*(p.progress||0)/100,estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
+          catch(error){item.dubbingStatus=signal.aborted?'paused':'error';item.dubbingError=error.message;throw error;}persist(true);
+        }
         if(hasSummary)for(const item of captionItems.filter(i=>i.type==='merged')){
           item.topicSummaryStatus='running';item.topicSummaryError='';update({currentId:item.id,currentTitle:item.title});persist(true);
-          try{item.topicSummary=await(options.generateSummary||generateSummary)(item,{signal,update:stageUpdate('summary',type==='summary'?0:85,100)});item.topicSummaryStatus='done';
+          try{item.topicSummary=await(options.generateSummary||generateSummary)(item,{signal,update:stageUpdate('summary',type==='summary'?0:hasDubbing?90:85,100)});item.topicSummaryStatus='done';
             if(options.exportSummaryDocuments)try{update({phase:'Preparando PDF e HTML clicáveis'});await options.exportSummaryDocuments(item);}catch(error){log('Sumário pronto; PDF pode ser gerado novamente ao baixar: '+error.message,'warning');}
           }
           catch(error){item.topicSummaryStatus=signal.aborted?'paused':'error';item.topicSummaryError=error.message;if(type==='summary'||signal.aborted)throw error;log('Vídeo e legenda prontos. Sumário precisa ser retomado: '+error.message,'warning');}
           persist(true);
         }
-        update({ status: 'done', phase: captionItems.some(i=>i.topicSummaryStatus==='error')?'Vídeo e legenda prontos. O sumário precisa ser retomado em Assuntos e tempos.':type==='summary'?'Sumário por assuntos pronto.':type === 'workflow' ? 'Tudo pronto. Os arquivos estão na pasta escolhida.' : type === 'merge' ? 'Vídeo unido pronto, com áudio e capítulos.' : 'Legendas prontas para assistir e baixar.', progress: 100, completed: items.length, completedAt: new Date().toISOString() });
+        update({ status: 'done', phase: captionItems.some(i=>i.topicSummaryStatus==='error')?'Vídeo e legenda prontos. O sumário precisa ser retomado em Assuntos e tempos.':type==='dubbing'?'Vídeo dublado em português pronto. Original preservado em Arquivos de apoio.':type==='summary'?'Sumário por assuntos pronto.':type === 'workflow' ? 'Tudo pronto. Os arquivos estão na pasta escolhida.' : type === 'merge' ? 'Vídeo unido pronto, com áudio e capítulos.' : 'Legendas prontas para assistir e baixar.', progress: 100, completed: items.length, completedAt: new Date().toISOString() });
         if (type === 'workflow') state.workflow.status = 'done';
         log(operation.phase, 'success');
       } catch (error) {
@@ -262,7 +277,7 @@ function createApp(options = {}) {
       if (!stopping && flow?.status === 'downloading') {
         const items = flow.ids.map(id => state.jobs.find(j => j.id === id && j.target === flow.target));
         if (items.every(j => j?.status === 'done')) {
-          if (flow.merge || flow.subtitles) { flow.status = 'processing'; startOperation('workflow', items, flow.language, flow); }
+          if (flow.merge || flow.subtitles || flow.dubbing) { flow.status = 'processing'; startOperation('workflow', items, flow.language, flow); }
           else flow.status = 'done';
         } else { flow.status = 'blocked'; log('Retome os episódios com erro para concluir as opções escolhidas.', 'warning'); }
       }
@@ -293,7 +308,8 @@ function createApp(options = {}) {
     persist(true);
   }
   function processingOptions(body) {
-    const p = { merge:false, subtitles:false, summary:true,language:'auto', subtitleLanguage:'original', ...body.processing };
+    const p = { merge:false, subtitles:false, summary:true,dubbing:false,voice:'male',language:'auto', subtitleLanguage:'original', ...body.processing };
+    if(typeof p.dubbing!=='boolean')throw Error('Opção de dublagem inválida.');dubbing.voice(p.voice);if(p.dubbing){p.subtitles=true;p.subtitleLanguage='pt';}
     if(typeof p.summary!=='boolean')throw Error('Opção de sumário inválida.');
     if (typeof p.merge !== 'boolean' || typeof p.subtitles !== 'boolean' || !['auto','en','pt','zh','es','fr','ja','de','it','ko'].includes(p.language) || !['original','pt'].includes(p.subtitleLanguage)) throw new Error('Opções de processamento inválidas.');
     return p;
@@ -474,6 +490,10 @@ function createApp(options = {}) {
           const language = body.language || 'auto'; if (!['auto', 'pt', 'en', 'zh', 'es', 'fr', 'ja', 'de', 'it', 'ko'].includes(language)) throw new Error('Idioma não suportado.');
           const target=body.subtitleLanguage||'original';if(!['pt','original'].includes(target))throw Error('Idioma da legenda não suportado.');
           startOperation('subtitles', selectedFinished(body.ids, true), language,{subtitleLanguage:target});
+        } else if(url.pathname==='/api/dubbing/calibrate'){
+          startOperation('dubbing-calibration',[],'auto',{voice:dubbing.voice(body.voice)});
+        } else if(url.pathname==='/api/dubbing'){
+          const items=selectedFinished(body.ids,true);if(items.some(i=>i.subtitles?.language!=='pt'||!subtitleDelivery(i,state).ready))throw Error('Prepare a legenda em português antes de dublar.');startOperation('dubbing',items,'auto',{voice:dubbing.voice(body.voice)});
         } else if(url.pathname==='/api/summary'){
           const items=selectedFinished(body.ids,true);
           if(items.some(i=>i.type!=='merged'||!subtitleDelivery(i,state).ready))throw Error('O sumário precisa de um vídeo unido com legenda pronta.');

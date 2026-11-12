@@ -18,6 +18,7 @@ async function whisper(engine,args,{signal,onLine}={}){
  catch(e){if(!engine.gpu||signal?.aborted)throw e;engine.gpu=false;engine.exe=engine.fallbackExe;return media.execute(engine.exe,[...args,'-ng'],{signal,onLine});}
 }
 async function detectSpeechLanguage(item,{signal,update=()=>{},engine,work}={}){
+ if(item.dubbing?.originalVideo&&fs.existsSync(item.dubbing.originalVideo))item={...item,output:item.dubbing.originalVideo};
  engine||=await ensureWhisper(update,signal);
  const info=await media.probe(item.output,signal),key=sourceKey(item,'auto');
  work||=path.join(DATA_DIR,'work','speech-'+key);fs.mkdirSync(work,{recursive:true});
@@ -41,6 +42,7 @@ function parseChunk(text,offset,duration){
 }
 function transcriptQuality(cues){let run=0,maxRun=0,previous='';for(const c of cues){const v=c.text.toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');run=v.length>12&&v===previous?run+1:1;previous=v;maxRun=Math.max(maxRun,run);}const repetitiveCues=cues.map((c,i)=>/([\p{L}])\1{11,}/u.test(c.text)?i+1:null).filter(Boolean);return {maxRepeatedRun:maxRun,repetitiveCues,suspicious:maxRun>=12||repetitiveCues.length>0};}
 async function transcribe(item,language,{signal,update=()=>{}}={}){
+ if(item.dubbing?.originalVideo&&fs.existsSync(item.dubbing.originalVideo))item={...item,output:item.dubbing.originalVideo};
  await media.inspect(item.output,{signal,volume:false});const engine=await ensureWhisper(update,signal),info=await media.probe(item.output,signal);
  const work=path.join(DATA_DIR,'work','speech-'+sourceKey(item,language));fs.mkdirSync(work,{recursive:true});
  const detection=language==='auto'?await detectSpeechLanguage(item,{signal,update,engine,work}):{version:2,language,manual:true,samples:[]};

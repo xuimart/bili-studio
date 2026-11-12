@@ -1,6 +1,6 @@
-# Compatibilidade e evidências — 4.1.2
+# Compatibilidade e evidências — 4.2.0
 
-Validado em **11 de novembro de 2026**, Windows 11 x64, Electron 45.2.3, FFmpeg 9.0.2. Os relatórios brutos ficam localmente em `data/`; não publicamos a biblioteca pessoal do usuário. Estes testes não certificam toda máquina, todo conteúdo ou futuras mudanças do Bilibili.
+Validado em **12 de novembro de 2026**, Windows 11 x64, Electron 45.2.3, FFmpeg 9.0.2. Os relatórios brutos ficam localmente em `data/`; não publicamos a biblioteca pessoal do usuário. Estes testes não certificam toda máquina, todo conteúdo ou futuras mudanças do Bilibili.
 
 ## Tipos de link
 
@@ -61,7 +61,7 @@ O teste gera arquivos reais com vídeo e sinal sonoro conhecido. Cada entrada pa
 
 ## Outros testes
 
-- **141 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio.
+- **148 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio.
 - PDF real de 12 páginas: 100 anotações de link e 100 destinos únicos conferidos contra a fonte, sem caminhos pessoais no endereço. Revisão visual de páginas inicial, intermediária e final. O desktop testa recebimento do link, abertura da prévia e busca no player real, além da presença de link no PDF empacotado. A política de abertura de protocolos depende do leitor PDF; não foi homologado todo leitor disponível.
 - Sumário real de aproximadamente 11h41 com 100 blocos. IDs e citações foram validados na legenda; tempos ficaram dentro do vídeo. O renderer testou clique/seek em vídeo real sintético. Isto não equivale a revisão humana integral da transcrição ou dos assuntos.
 - App Electron empacotado em perfil vazio, fora da pasta de fontes: interface pronta e dados separados da instalação. O teste desktop também reproduz MP4 e decodifica AAC dentro do Chromium incorporado.
@@ -74,3 +74,9 @@ O teste gera arquivos reais com vídeo e sinal sonoro conhecido. Cada entrada pa
 Lives em andamento; links de áudio sem vídeo; Bilibili.tv internacional; DRM; conteúdo removido, privado, bloqueado por região ou sem permissão; garantias de disponibilidade da plataforma; Windows ARM/32 bits, macOS e Linux. O instalador desta release é Windows x64. Windows 10 e outros hardwares não foram homologados em máquina física nesta rodada.
 
 As amostras são curtas; não provam ausência de corrupção em todos os pontos de um vídeo de horas. A inspeção de volume normal usa uma amostra inicial. Reconhecimento/tradução continuam sujeitos a erros linguísticos. Recomendamos reportar um caso reproduzível com versão, tipo de link e mensagem, sem cookies ou dados de sessão.
+
+## Dublagem e estimativa
+
+Teste real em RTX 3060 12 GB: instalação independente de Python/OmniVoice, calibração de 30 segundos, vozes masculina e feminina em fixture com substituição do áudio e backup. Duas prévias reais de 180 segundos, uma de origem mandarim e outra inglês, verificadas por decodificação, duração, áudio único em português e correspondência ao WAV sintético. Os originais permanecem intactos. As frases são ancoradas com controle de duração e detector de fala; não é prova de alinhamento semântico/labial perfeito. Os exemplos receberam revisão de texto.
+
+O planejador foi aplicado às 11 bibliotecas locais sem gerar dublagens completas: oito passaram e três indicaram trechos excessivamente densos/repetitivos para revisão. A calibração mede a voz no dispositivo real; o intervalo é projeção com margem e exclui preparação, download, transcrição e tradução. Não foi executada uma aula inteira de 1 a 12 horas nem uma matriz de GPUs/CPUs.
