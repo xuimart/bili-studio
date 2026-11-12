@@ -21,6 +21,9 @@ files:
   - subtitle-delivery.cjs
   - library-files.cjs
   - topic-summary.cjs
+  - dubbing.cjs
+  - dubbing-runtime.cjs
+  - dubbing-worker.py
   - summary-document.cjs
   - ollama-transport.cjs
   - captions.cjs

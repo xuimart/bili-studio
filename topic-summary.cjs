@@ -62,7 +62,7 @@ async function generateSummary(item,{signal,update=()=>{},generate,chapters,dura
  if(!item.subtitles?.srt||!fs.existsSync(item.subtitles.srt))throw Error('Gere a legenda antes do sumário.');
  const source=item.subtitles.alignedSrt&&fs.existsSync(item.subtitles.alignedSrt)?item.subtitles.alignedSrt:item.subtitles.srt;
  const content=fs.readFileSync(source,'utf8');
- if(!duration){const info=await require('./media.cjs').probe(item.output,signal);duration=info.duration;chapters||=info.chapters;}
+ if(!duration){const original=item.dubbing?.videoCopied&&item.dubbing.originalVideo&&fs.existsSync(item.dubbing.originalVideo)?item.dubbing.originalVideo:item.output;const info=await require('./media.cjs').probe(original,signal);duration=info.duration;chapters||=info.chapters;}
  const {cues,adjustments}=summaryCues(parseDisplay(content),duration),blocks=blocksFor(cues,duration,chapters||item.chapters||[]);
  const fingerprint=crypto.createHash('sha256').update(JSON.stringify({version:VERSION,content,duration,blocks:blocks.map(b=>[b.start,b.end])})).digest('hex');
  const folder=path.join(item.libraryRoot||path.dirname(item.output),'Arquivos de apoio');fs.mkdirSync(folder,{recursive:true});

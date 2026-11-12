@@ -1,5 +1,12 @@
 # Histórico
 
+## 4.2.0 — 2026-11-12
+
+- Dublagem local em português com motor independente, vozes sintéticas e tradução preparada quando necessária.
+- Teste real de 30 segundos para estimar o tempo no computador da pessoa, com preparação inicial separada e atualização durante a voz.
+- Detector de fala, frases menores e geração com duração controlada para melhorar o encaixe.
+- Troca apenas o áudio do MP4, conserva imagem/capítulos e preserva a versão anterior. Checkpoints e recuperação de publicação interrompida.
+
 ## 4.1.2 — 2026-11-11
 
 - PDF principal do sumário ao lado do MP4 e SRT, com nome da playlist e caracteres seguros para Windows.

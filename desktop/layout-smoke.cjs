@@ -6,7 +6,7 @@ const profile=path.resolve('data','layout-smoke-'+Date.now());fs.mkdirSync(profi
 app.setPath('userData',profile);process.env.BILI_DATA_DIR=profile;process.env.BILI_CACHE_DIR=path.join(profile,'components');
 let backend,win;
 app.whenReady().then(async()=>{
- backend=require('../server.cjs').createApp({dataDir:profile});
+ backend=require('../server.cjs').createApp({dataDir:profile,calibrateDubbing:async voice=>{const d=require('../dubbing.cjs');return{engine:d.ENGINE,model:d.MODEL,machine:d.machine,voice,rtf:.4,loadSeconds:3,sampleSeconds:30,measuredSeconds:12,measuredAt:new Date().toISOString()};}});
  const state=backend.state;
  state.folder='C:\\Vídeos\\Bili Studio';state.processingPrefs={subtitles:true,merge:false,language:'auto',subtitleLanguage:'pt'};
  state.library={id:'test-library',title:'Vídeos para baixar',entries:Array.from({length:15},(_,i)=>({id:'new-'+i,bvid:'BV1Q3411772i',page:i+1,index:i+1,title:'Aula '+String(i+1).padStart(2,'0')+' · Desenho e construção',duration:120,url:'https://www.bilibili.com/video/BV1Q3411772i/?p='+(i+1)}))};
@@ -21,6 +21,10 @@ app.whenReady().then(async()=>{
  let initial;const deadline=Date.now()+15000;do{initial=await read();if(initial.ready)break;await new Promise(r=>setTimeout(r,100));}while(Date.now()<deadline);
  assert.equal(initial.ready,true);assert.equal(initial.queueHidden,true);assert.equal(initial.historyOpen,false);assert.equal(initial.historyRows,9);assert.equal(initial.activeRows,0);assert.equal(initial.bannerHidden,true);assert.equal(initial.progressHidden,true);assert.equal(initial.selected,'15 selecionados');assert.equal(initial.workspaceBeforeQueue,true);assert.ok(initial.workspaceTop-initial.sourceBottom<40);
  fs.writeFileSync(path.join(profile,'history-collapsed.png'),(await win.webContents.capturePage()).toPNG());
+ await win.webContents.executeJavaScript('document.querySelector("#with-dubbing").click();document.querySelector("#calibrate-voice").click()');
+ const calibrationDeadline=Date.now()+5000;while(!state.dubbingBenchmarks?.male&&Date.now()<calibrationDeadline)await new Promise(r=>setTimeout(r,50));await win.webContents.executeJavaScript('poll()');
+ const dubControls=await win.webContents.executeJavaScript('({enabled:document.querySelector("#with-dubbing").checked,pt:document.querySelector("#subtitle-language").value,subtitles:document.querySelector("#with-subtitles").checked,estimate:document.querySelector("#dubbing-estimate").textContent})');assert.ok(dubControls.enabled&&dubControls.subtitles);assert.equal(dubControls.pt,'pt');assert.match(dubControls.estimate,/Estimativa neste computador/);
+ await win.webContents.executeJavaScript('document.querySelector("#with-dubbing").scrollIntoView({block:"center",behavior:"instant"});new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');fs.writeFileSync(path.join(profile,'dubbing-options.png'),(await win.webContents.capturePage()).toPNG());await win.webContents.executeJavaScript('window.scrollTo(0,0)');
  state.exports[0].subtitles={language:'zh',srt:path.join(profile,'original.srt'),vtt:path.join(profile,'original.vtt')};state.exports[0].subtitleDelivery={requestedLanguage:'pt',status:'error'};
  await win.webContents.executeJavaScript('poll()');await win.webContents.executeJavaScript('preview(state.exports[0])');
  const captionGuard=await win.webContents.executeJavaScript('({tracks:document.querySelector("#player").querySelectorAll("track").length,downloadHidden:document.querySelector("#download-srt").hidden,notice:document.querySelector("#preview-caption-status").textContent})');

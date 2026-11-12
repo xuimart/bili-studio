@@ -63,6 +63,18 @@ Em **Assuntos e tempos**, use **PDF clicável** ou **HTML clicável**. O PDF pri
 
 Uma exportação de sumário existente não executa o modelo de IA novamente. Falhas de exportação preservam o sumário, o PDF anterior e os vídeos.
 
+## Dublagem em português
+
+Ative **Dublar em português** no painel de resultado. A tradução em português é preparada quando necessária; o original fica preservado em **Arquivos de apoio / Versões anteriores**. O MP4 principal passa a conter somente a nova voz. A imagem e os capítulos são copiados, sem recodificar o vídeo. Para uma aula já pronta, abra sua prévia e use **Dublar este vídeo em português**. Comece por um vídeo curto e confira o resultado antes de processar aulas longas.
+
+Escolha a voz e use **Testar velocidade neste computador**. O teste gera 30 segundos de fala e salva a medição por voz e computador. A faixa exibida estima a geração de voz e montagem, com margem para variação. Download, transcrição, tradução e preparação inicial são etapas separadas. Durante a síntese, o restante é ajustado pelas falas efetivamente geradas; em retomadas, trechos de cache não são usados para fingir uma velocidade maior.
+
+Na primeira vez, o aplicativo prepara Python, OmniVoice, PyTorch e os modelos no próprio perfil. Isso pode baixar vários GB. Não exige outro programa de voz instalado. Depois da preparação, a geração funciona localmente. GPU NVIDIA compatível pode acelerar; o teste registra o dispositivo realmente usado.
+
+O encaixe usa os tempos da legenda, detecção de fala e duração controlada por frase. Legendas com tempos ou termos incorretos prejudicam o resultado. Falas densas demais para o intervalo são recusadas para revisão. A voz é sintética; não copia a voz do professor. A dublagem remove música/ruídos junto com o áudio anterior e não realiza sincronização labial.
+
+Pode cancelar e retomar: falas concluídas ficam em checkpoint. O programa verifica o MP4 antes de substituir, preserva a versão anterior e mantém um diário para recuperar uma publicação interrompida. Limite desta versão: 24 horas por arquivo.
+
 ## Fechar, atualizar e recuperar
 
 Durante um trabalho, fechar a janela oferece continuar em segundo plano, manter a janela aberta ou pausar e sair. A bandeja do Windows permite reabrir a janela. Enquanto há trabalho, o aplicativo solicita que o Windows não suspenda automaticamente a sessão; isso termina quando a fila fica inativa.
