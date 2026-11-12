@@ -15,6 +15,7 @@ const {subtitleDelivery,applySubtitleRepairs}=require('./subtitle-delivery.cjs')
 const {organizeLibraries,captionBase}=require('./library-files.cjs');
 const {generateSummary}=require('./topic-summary.cjs');
 const dubbing=require('./dubbing.cjs');
+const lessons=require('./lesson-delivery.cjs');
 const {APP_ROOT:ROOT,DATA_DIR,BIN_DIR,DOWNLOAD_DIR}=require('./runtime-paths.cjs');
 const DEFAULT_URL = '';
 function launch(executable, args) { return spawn(executable, args, { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] }); }
@@ -73,7 +74,7 @@ function createApp(options = {}) {
   const ffmpeg = fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) ? BIN_DIR : 'ffmpeg';
   const store = createStateStore(stateFile, () => state, { onWarning: warning => { state.persistenceWarning = warning; } });
   const persist = store.persist;
-  for(const item of [...state.jobs,...state.exports])if(item.dubbingStatus==='running')item.dubbingStatus='paused';
+  for(const item of [...state.jobs,...state.exports]){if(item.dubbingStatus==='running')item.dubbingStatus='paused';if(item.processingDelivery?.status==='running')item.processingDelivery.status='paused';}
   if(dubbing.recoverDubs(state,dataDir))persist(true);
   if(applySubtitleRepairs(state,dataDir))persist(true);
   const organize = () => organizeLibraries(state,dataDir,{persist:()=>persist(true)});
@@ -82,7 +83,7 @@ function createApp(options = {}) {
   function publicState() {
     state.dubbingEngine=dubbing.ENGINE;state.dubbingMachine=dubbing.machine;
     if(applySubtitleRepairs(state,dataDir))persist(true);
-    const project=item=>{const delivery=subtitleDelivery(item,state);return {...item,subtitleReady:delivery.ready,subtitleNotice:delivery.notice,subtitleStatus:delivery.status};};
+    const project=item=>{const delivery=subtitleDelivery(item,state);return {...item,...lessons.playback(item,state),subtitleReady:delivery.ready,subtitleNotice:delivery.notice,subtitleStatus:delivery.status};};
     return { ...state, jobs:state.jobs.map(project),exports:state.exports.map(project),desktop:!!options.choosePath, tools: { downloader: fs.existsSync(ytdlp), ffmpeg: fs.existsSync(path.join(BIN_DIR, 'ffmpeg.exe')) || ffmpeg === 'ffmpeg', whisper: !!findEngine() && fs.existsSync(MODEL) }, summary: { total: state.jobs.length, done: state.jobs.filter(j => j.status === 'done').length, failed: state.jobs.filter(j => j.status === 'error').length } };
   }
   async function inspectJob(job) {
@@ -121,14 +122,18 @@ function createApp(options = {}) {
     const hasMerge = type === 'merge' || (type === 'workflow' && processing.merge);
     const hasCaptions = type === 'subtitles' || (type === 'workflow' && processing.subtitles);
     const hasTranslation = hasCaptions && processing.subtitleLanguage === 'pt';
-    const hasSummary = type==='summary'||hasCaptions&&processing.summary!==false;
+    const hasSummary = type==='summary'||hasCaptions&&processing.summary!==false&&(hasMerge||items.some(i=>i.type==='merged'));
     const hasDubbing=type==='dubbing'||type==='workflow'&&processing.dubbing;
+    const lessonEnd=hasSummary?(hasDubbing?90:85):100;
     const mergeEnd = hasCaptions ? 60 : 100;
     const captionStart = hasMerge ? mergeEnd : 0, captionEnd = hasTranslation ? 80 : 100;
-    const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:(from+(to-from)*(p.progress||0)/100)*(stage!=='summary'?(hasDubbing?.65:hasSummary?.85:1):1)});
+    let lessonIndex=0,lessonTotal=hasMerge?1:Math.max(1,items.length);
+    const lessonProgress=value=>(lessonIndex+value/100)/lessonTotal*100;
+    const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:stage==='merge'||stage==='summary'?(from+(to-from)*(p.progress||0)/100)*(stage==='merge'?(hasDubbing?.65:hasSummary?.85:1):1):lessonProgress((from+(to-from)*(p.progress||0)/100)*(hasDubbing?.65:hasSummary?.85:1))});
+    if(!hasMerge&&(hasCaptions||hasDubbing))for(const item of items)if(type!=='workflow'||!lessons.reusable(item,processing,dubbing.ENGINE))item.processingDelivery={...lessons.plan(processing),status:'pending'};
     persist(true);
     void (async () => {
-      let currentCaption=null;
+      let currentCaption=null,currentLesson=null;
       try {
         if(type==='dubbing-calibration'){
           operation.total=1;update({phase:'Preparando teste de velocidade · primeira preparação não conta na estimativa',stage:'dubbing-calibration'});
@@ -144,9 +149,12 @@ function createApp(options = {}) {
           if (!reusable) state.exports.push(result); operation.resultId = result.id; persist(true);
           captionItems = [result];
         }
-        if (hasCaptions) {
-          for (let index = 0; index < captionItems.length; index++) {
-            const item = captionItems[index];currentCaption=item;item.subtitleDelivery={requestedLanguage:processing.subtitleLanguage||'original',status:'processing'};update({ currentId: item.id, currentTitle: item.title, completed: index });
+        for(let index=0;index<captionItems.length;index++){
+          const item=captionItems[index];lessonIndex=index;lessonTotal=captionItems.length;currentLesson=item;
+          if(type==='workflow'&&lessons.reusable(item,processing,dubbing.ENGINE)){update({currentId:item.id,currentTitle:item.title,completed:index+1,progress:lessonProgress(lessonEnd),phase:'Aula pronta · reaproveitando o processamento concluído'});currentLesson=null;continue;}
+          if(hasCaptions||hasDubbing){item.processingDelivery={...lessons.plan({...processing,subtitles:hasCaptions||processing.subtitles,dubbing:hasDubbing}),status:'running'};persist(true);}
+          if(hasCaptions){
+            currentCaption=item;item.subtitleDelivery={requestedLanguage:processing.subtitleLanguage||'original',status:'processing'};update({ currentId: item.id, currentTitle: item.title, completed: index,stage:'transcribe',stageProgress:0,phase:'Preparando legenda · aula '+(index+1)+' de '+captionItems.length,progress:lessonProgress(captionStart*(hasDubbing?.65:hasSummary?.85:1)) });
             const previous=item.subtitles,sourceLanguage=previous?.sourceLanguage||previous?.original?.language||previous?.language;
             const sameLanguage=language==='auto'?(previous?.original?.detectionVersion>=2||previous?.detectionVersion>=2):sourceLanguage===language;
             const reusePortuguese=processing.subtitleLanguage==='pt'&&previous?.language==='pt'&&sameLanguage&&['srt','vtt'].every(key=>previous[key]&&fs.existsSync(previous[key]));
@@ -172,14 +180,16 @@ function createApp(options = {}) {
               if(fs.existsSync(alias)&&!fs.readFileSync(alias).equals(fs.readFileSync(item.subtitles.srt)))fs.copyFileSync(alias,alias+'.anterior-'+Date.now());
               fs.copyFileSync(item.subtitles.srt,alias);item.subtitles.playbackSrt=alias;
             }
-            item.subtitleDelivery.status='done';operation.completed = index + 1; persist(true);
+            item.subtitleDelivery.status='done';persist(true);
           }
-        }
-        currentCaption=null;
-        if(hasDubbing)for(const item of captionItems){
-          const from=type==='dubbing'?0:65,to=hasSummary?90:100;item.dubbingStatus='running';item.dubbingError='';update({currentId:item.id,currentTitle:item.title,stage:'dubbing',progress:from});persist(true);
-          try{item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:from+(to-from)*(p.progress||0)/100,estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
+          currentCaption=null;
+          if(hasDubbing){
+          const from=type==='dubbing'?0:65,to=hasSummary?90:100;item.dubbingStatus='running';item.dubbingError='';update({currentId:item.id,currentTitle:item.title,stage:'dubbing',progress:lessonProgress(from)});persist(true);
+          try{item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:lessonProgress(from+(to-from)*(p.progress||0)/100),estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
           catch(error){item.dubbingStatus=signal.aborted?'paused':'error';item.dubbingError=error.message;throw error;}persist(true);
+          }
+          if(hasCaptions||hasDubbing){item.processingDelivery=lessons.complete(item,{...processing,subtitles:hasCaptions||processing.subtitles,dubbing:hasDubbing});update({completed:index+1,progress:lessonProgress(lessonEnd),phase:'Aula '+(index+1)+' pronta para assistir'});persist(true);}
+          currentLesson=null;
         }
         if(hasSummary)for(const item of captionItems.filter(i=>i.type==='merged')){
           item.topicSummaryStatus='running';item.topicSummaryError='';update({currentId:item.id,currentTitle:item.title});persist(true);
@@ -193,6 +203,7 @@ function createApp(options = {}) {
         if (type === 'workflow') state.workflow.status = 'done';
         log(operation.phase, 'success');
       } catch (error) {
+        if(currentLesson?.processingDelivery)Object.assign(currentLesson.processingDelivery,{status:signal.aborted?'paused':'error',error:error.message});
         if(currentCaption)currentCaption.subtitleDelivery={...currentCaption.subtitleDelivery,status:signal.aborted?'cancelled':'error',error:error.message};
         if (type === 'workflow') state.workflow.status = signal.aborted ? 'cancelled' : 'error';
         update({ status: signal.aborted ? 'cancelled' : 'error', phase: signal.aborted ? 'Operação cancelada. Os vídeos originais foram preservados.' : error.message, error: signal.aborted ? '' : error.message });
@@ -341,7 +352,11 @@ function createApp(options = {}) {
       else state.jobs.push({...entry,target,quality:settings.quality,cookieFile:settings.cookieFile,status:'queued',progress:0,error:''});
     }
     for (const job of state.jobs) if (job.status==='queued' && (job.target!==target || !ids.has(job.id))) job.status='paused';
-    state.workflow={...processing,ids:[...ids],target,title:library.title,queueId:queueItem?.id,status:'downloading'};
+    state.workflow={...processing,ids:[...ids],target,title:library.title,libraryId:library.id,queueId:queueItem?.id,status:'downloading'};
+    if(!processing.merge)for(const job of state.jobs.filter(j=>ids.has(j.id)&&j.target===target)){
+      if(processing.subtitles||processing.dubbing){if(!lessons.reusable(job,processing,dubbing.ENGINE))job.processingDelivery={...lessons.plan(processing),status:'pending'};}
+      else delete job.processingDelivery;
+    }
     if (queueItem) { queueItem.target=target;queueItem.jobIds=[...ids];queueItem.status='running';queueItem.error=''; }
     else { Object.assign(state,settings);state.processingPrefs={...processing}; }
     persist(true);void worker();
@@ -432,7 +447,7 @@ function createApp(options = {}) {
         if(format!=='markdown')try{if(!item.topicSummary)return send(409,{error:'Gere o sumário primeiro.'});if(format==='pdf'&&!options.exportSummaryDocuments)return send(409,{error:'Abra o aplicativo Bili Studio instalado para exportar o PDF.'});await(options.exportSummaryDocuments||require('./summary-document.cjs').exportSummaryDocuments)(item);persist(true);}catch(error){return send(400,{error:'Não foi possível preparar o documento: '+error.message});}
         file=item.topicSummary?.[format];mime=types[format];
       }
-      if (url.pathname === '/api/media') { if (!item.media?.audioVerified) return send(409, { error: 'O áudio deste vídeo ainda está sendo verificado.' }); file = item.output; mime = 'video/mp4'; }
+      if (url.pathname === '/api/media') { if (!item.media?.audioVerified) return send(409, { error: 'O áudio deste vídeo ainda está sendo verificado.' });const available=lessons.playback(item,state);if(!available.playbackReady)return send(409,{error:available.playbackLabel+'. Aguarde essa aula terminar de ser preparada; as aulas prontas podem ser assistidas.'});file = item.output; mime = 'video/mp4'; }
       if (url.pathname === '/api/thumbnail') { file = item.thumbnail; mime = 'image/jpeg'; }
       if (url.pathname === '/api/subtitle') { const delivery=subtitleDelivery(item,state);if(!delivery.ready)return send(409,{error:delivery.notice});const format = url.searchParams.get('format') || 'vtt'; if (!['vtt', 'srt', 'txt'].includes(format)) return send(400, { error: 'Formato inválido.' }); file = item.subtitles?.[format]; mime = format === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8'; }
       if (!file || !fs.existsSync(file)) return send(404, { error: 'Arquivo indisponível.' });

@@ -1,4 +1,4 @@
-# Compatibilidade e evidências — 4.2.1
+# Compatibilidade e evidências — 4.3.0
 
 Validado em **12 de novembro de 2026**, Windows 11 x64, Electron 45.2.3, FFmpeg 9.0.2. Os relatórios brutos ficam localmente em `data/`; não publicamos a biblioteca pessoal do usuário. Estes testes não certificam toda máquina, todo conteúdo ou futuras mudanças do Bilibili.
 
@@ -61,7 +61,7 @@ O teste gera arquivos reais com vídeo e sinal sonoro conhecido. Cada entrada pa
 
 ## Outros testes
 
-- **150 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio. Regressões de dublagem cobrem “por meio”, verbo/complemento e divisão em pontuação sem perder palavras.
+- **155 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio. Regressões de dublagem cobrem “por meio”, verbo/complemento e divisão em pontuação sem perder palavras.
 - PDF real de 12 páginas: 100 anotações de link e 100 destinos únicos conferidos contra a fonte, sem caminhos pessoais no endereço. Revisão visual de páginas inicial, intermediária e final. O desktop testa recebimento do link, abertura da prévia e busca no player real, além da presença de link no PDF empacotado. A política de abertura de protocolos depende do leitor PDF; não foi homologado todo leitor disponível.
 - Sumário real de aproximadamente 11h41 com 100 blocos. IDs e citações foram validados na legenda; tempos ficaram dentro do vídeo. O renderer testou clique/seek em vídeo real sintético. Isto não equivale a revisão humana integral da transcrição ou dos assuntos.
 - App Electron empacotado em perfil vazio, fora da pasta de fontes: interface pronta e dados separados da instalação. O teste desktop também reproduz MP4 e decodifica AAC dentro do Chromium incorporado.
@@ -84,3 +84,9 @@ Na correção 4.2.1, a mesma frase unificada foi sintetizada com duração fixa 
 As duas prévias de 180 segundos foram regeneradas com o motor natural: decodificação completa, uma faixa PT, comparação com o WAV sintético e reconhecimento em português. Erro de palavras do reconhecimento automático: aproximadamente 2,8% e 3,7%; isso não substitui revisão humana. A expressão de regressão foi reconhecida inteira na mesma fala. A maior compressão usada nas amostras foi 1,20; nenhuma teve alongamento da voz para preencher tempo. Os arquivos de origem permaneceram intactos.
 
 O planejador foi aplicado às 11 bibliotecas locais sem gerar dublagens completas: oito passaram e três indicaram trechos excessivamente densos/repetitivos para revisão. A calibração mede a voz no dispositivo real; o intervalo é projeção com margem e exclui preparação, download, transcrição e tradução. Não foi executada uma aula inteira de 1 a 12 horas nem uma matriz de GPUs/CPUs.
+
+## Entrega e reprodução por aula — 4.3.0
+
+Fixtures de duas aulas verificam a ordem legenda/tradução → voz → próxima aula, MP4 e VTT servidos por GET/range enquanto a segunda continua, recusa de mídia em alteração, falha/cancelamento com a primeira preservada e retomada sem repetir a primeira. O modo unido continua processando apenas o resultado final. Snapshots inválidos por mudança de legenda, vídeo, voz ou motor não são reaproveitados.
+
+O renderer real selecionou os dois modos, abriu e reproduziu um MP4 sintético legendado durante a preparação da segunda aula e manteve o mesmo player/tempo durante polling e liberação da segunda. O teste confere também liberação do arquivo ao fechar. Estes ensaios usam etapas de transcrição/voz simuladas para testar a coordenação; não representam uma nova execução integral de bibliotecas de horas. As provas reais do motor de dublagem permanecem descritas acima.

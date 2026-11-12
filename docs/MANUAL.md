@@ -8,6 +8,10 @@ Cole um link em **Link da playlist ou vídeo** e busque os episódios. A seleç�
 
 **Iniciar fila** executa uma biblioteca de cada vez. A fila informa a biblioteca atual, a etapa, o progresso e os próximos trabalhos. **Pausar após o atual** não corta a operação em andamento. Pausar downloads preserva os arquivos parciais. Um trabalho com erro pode ser retomado, reaproveitando arquivos verificados e checkpoints.
 
+Em **Como quer assistir?**, escolha **Aula por aula** para manter os MP4 separados. Depois dos downloads da seleção, o programa conclui a legenda/tradução e a dublagem escolhidas para a primeira aula antes de preparar a segunda. O botão **Assistir legendado** ou **Assistir dublado** fica ao lado de cada aula pronta; elas também aparecem em **Já pode assistir**, durante a execução. Abrir o player não pausa o processamento. Uma aula em preparação mostra sua etapa e aguarda a conclusão antes de ser aberta. Se houver falha ou cancelamento, as aulas já concluídas permanecem prontas; retomar com as mesmas opções reaproveita essas aulas.
+
+Para assistir a itens anteriores da fila, abra **Histórico e arquivos prontos → Arquivos prontos** e use **Assistir** ao lado do arquivo. O painel Já pode assistir acompanha a seleção em execução e, depois de concluída, só permanece para a mesma biblioteca; não ocupa a entrada de uma nova biblioteca com resultados antigos. Fechar o player libera o arquivo. Se você solicitar um novo processamento da aula aberta, o player fecha para permitir sua substituição com segurança.
+
 Vídeo e áudio podem vir separados do Bilibili. O aplicativo baixa as faixas e entrega MP4 com H.264/AAC. Se a fonte usa outro codec, a conversão pode levar tempo; o progresso da conversão é mostrado. Arquivos sem vídeo ou sem faixa de áudio não são considerados concluídos. A verificação de volume usa uma amostra inicial, não prova que todas as falas do vídeo estão audíveis.
 
 ## Legendas
@@ -24,7 +28,7 @@ Se um player externo continuar mostrando chinês, selecione o SRT com o mesmo no
 
 ## União
 
-Ative **Juntar em um único vídeo** para criar um MP4 por biblioteca. A ordem segue os episódios selecionados. O programa usa cópia direta quando possível e normaliza somente o necessário quando áudio, dimensões ou taxas de quadros diferem. Verifica áudio e duração antes de concluir. Os episódios individuais permanecem disponíveis. Uma falha preserva originais e partes reaproveitáveis.
+Escolha **Uma aula completa** para criar um MP4 por biblioteca. A ordem segue os episódios selecionados. Nesse modo, o programa une primeiro e aplica a legenda e a dublagem escolhidas ao vídeo completo. O programa usa cópia direta quando possível e normaliza somente o necessário quando áudio, dimensões ou taxas de quadros diferem. Verifica áudio e duração antes de concluir. Os episódios individuais originais permanecem disponíveis. Uma falha preserva originais e partes reaproveitáveis.
 
 Depois da união, a pasta fica assim:
 
@@ -47,7 +51,7 @@ Bibliotecas antigas são organizadas automaticamente com o aplicativo ocioso. Os
 
 ## Sumário por assuntos
 
-Com união e legenda ligadas, marque **Gerar sumário por assuntos depois da legenda**. O programa usa o modelo local já preparado para ler trechos da legenda, identificar assuntos e criar títulos/descrições em português. Pode desligar a opção se quiser apenas vídeo e legenda.
+Com **Uma aula completa** e legenda ligadas, marque **Gerar sumário por assuntos no vídeo unido**. O programa usa o modelo local já preparado para ler trechos da legenda, identificar assuntos e criar títulos/descrições em português. Pode desligar a opção se quiser apenas vídeo e legenda.
 
 Abra **Histórico → Arquivos prontos → Assuntos e tempos** ou o botão **Assuntos e tempos** do resultado. Um clique no assunto busca seu horário no vídeo. **Baixar sumário** entrega Markdown; os arquivos de sumário e checkpoint ficam em **Arquivos de apoio**. Para vídeos anteriores, use **Gerar sumário**; em caso de falha, **Retomar sumário** preserva blocos válidos. O sumário não requer baixar ou transcrever o vídeo novamente.
 

@@ -1,5 +1,12 @@
 # Histórico
 
+## 4.3.0 — 2026-11-12
+
+- Escolha explícita entre Aula por aula (MP4 separados) e Uma aula completa (MP4 unido com capítulos), preservada por item da fila.
+- No modo separado, legenda/tradução e dublagem são concluídas por aula, antes de passar à próxima. Aulas prontas podem ser assistidas enquanto o restante continua.
+- Atalhos Assistir legendado/Assistir dublado nas aulas, nos arquivos do histórico e no painel Já pode assistir. A reprodução não é reiniciada pelo acompanhamento do processamento.
+- Retomada conserva o progresso por aula; alterações de vídeo, legenda, idioma, voz ou motor invalidam o reaproveitamento. Arquivos ainda sendo alterados não são publicados como prontos.
+
 ## 4.2.1 — 2026-11-12
 
 - Corrige quebras como “por / meio do design”: a geração conserva frases e expressões completas, com divisões por pontuação e limites seguros.
