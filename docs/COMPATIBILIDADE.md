@@ -1,4 +1,4 @@
-# Compatibilidade e evidências — 4.2.0
+# Compatibilidade e evidências — 4.2.1
 
 Validado em **12 de novembro de 2026**, Windows 11 x64, Electron 45.2.3, FFmpeg 9.0.2. Os relatórios brutos ficam localmente em `data/`; não publicamos a biblioteca pessoal do usuário. Estes testes não certificam toda máquina, todo conteúdo ou futuras mudanças do Bilibili.
 
@@ -61,7 +61,7 @@ O teste gera arquivos reais com vídeo e sinal sonoro conhecido. Cada entrada pa
 
 ## Outros testes
 
-- **148 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio.
+- **150 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio. Regressões de dublagem cobrem “por meio”, verbo/complemento e divisão em pontuação sem perder palavras.
 - PDF real de 12 páginas: 100 anotações de link e 100 destinos únicos conferidos contra a fonte, sem caminhos pessoais no endereço. Revisão visual de páginas inicial, intermediária e final. O desktop testa recebimento do link, abertura da prévia e busca no player real, além da presença de link no PDF empacotado. A política de abertura de protocolos depende do leitor PDF; não foi homologado todo leitor disponível.
 - Sumário real de aproximadamente 11h41 com 100 blocos. IDs e citações foram validados na legenda; tempos ficaram dentro do vídeo. O renderer testou clique/seek em vídeo real sintético. Isto não equivale a revisão humana integral da transcrição ou dos assuntos.
 - App Electron empacotado em perfil vazio, fora da pasta de fontes: interface pronta e dados separados da instalação. O teste desktop também reproduz MP4 e decodifica AAC dentro do Chromium incorporado.
@@ -77,6 +77,10 @@ As amostras são curtas; não provam ausência de corrupção em todos os pontos
 
 ## Dublagem e estimativa
 
-Teste real em RTX 3060 12 GB: instalação independente de Python/OmniVoice, calibração de 30 segundos, vozes masculina e feminina em fixture com substituição do áudio e backup. Duas prévias reais de 180 segundos, uma de origem mandarim e outra inglês, verificadas por decodificação, duração, áudio único em português e correspondência ao WAV sintético. Os originais permanecem intactos. As frases são ancoradas com controle de duração e detector de fala; não é prova de alinhamento semântico/labial perfeito. Os exemplos receberam revisão de texto.
+Teste real em RTX 3060 12 GB: instalação independente de Python/OmniVoice, calibração de 30 segundos, vozes masculina e feminina em fixture com substituição do áudio e backup na 4.2.0. Duas prévias reais de 180 segundos, uma de origem mandarim e outra inglês, verificadas por decodificação, duração, áudio único em português e correspondência ao WAV sintético. Os originais permanecem intactos. As frases são ancoradas com detector de fala; não é prova de alinhamento semântico/labial perfeito. Os exemplos receberam revisão de texto.
+
+Na correção 4.2.1, a mesma frase unificada foi sintetizada com duração fixa e com ritmo natural: a primeira apresentou 2,3 s quietos no início; a segunda não apresentou intervalo quieto de pelo menos 400 ms. Isso é uma medição de energia da amostra, não avaliação humana integral. Cinco testes Python independentes do modelo verificam preservação de fala, pausas curtas e áudio de baixa intensidade, remoção de silêncio excedente e recusa de saída silenciosa.
+
+As duas prévias de 180 segundos foram regeneradas com o motor natural: decodificação completa, uma faixa PT, comparação com o WAV sintético e reconhecimento em português. Erro de palavras do reconhecimento automático: aproximadamente 2,8% e 3,7%; isso não substitui revisão humana. A expressão de regressão foi reconhecida inteira na mesma fala. A maior compressão usada nas amostras foi 1,20; nenhuma teve alongamento da voz para preencher tempo. Os arquivos de origem permaneceram intactos.
 
 O planejador foi aplicado às 11 bibliotecas locais sem gerar dublagens completas: oito passaram e três indicaram trechos excessivamente densos/repetitivos para revisão. A calibração mede a voz no dispositivo real; o intervalo é projeção com margem e exclui preparação, download, transcrição e tradução. Não foi executada uma aula inteira de 1 a 12 horas nem uma matriz de GPUs/CPUs.

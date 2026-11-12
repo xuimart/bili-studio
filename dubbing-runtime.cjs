@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{spawn,spawnSync}=require('node:child_process');
 const {CACHE_DIR}=require('./runtime-paths.cjs');
 const ROOT=path.join(CACHE_DIR,'dubbing'),PYTHON=path.join(ROOT,'venv','Scripts','python.exe');
-const ENGINE='omnivoice-0.2.1-duration-v2',MODEL='c5fdb5ccb189668d56333f77ba2629f4cd7535f4';
+const ENGINE='omnivoice-0.2.1-natural-v3',MODEL='c5fdb5ccb189668d56333f77ba2629f4cd7535f4';
 const RUNTIME='omnivoice-0.2.1-torch2.8-transformers5.10';
 function command(exe,args,{signal,onLine=()=>{},env={}}={}){return new Promise((resolve,reject)=>{const child=spawn(exe,args,{windowsHide:true,shell:false,signal,env:{...process.env,...env},stdio:['ignore','pipe','pipe']});let tail='';for(const stream of [child.stdout,child.stderr]){let pending='';stream.setEncoding('utf8');stream.on('data',text=>{tail=(tail+text).slice(-6000);pending+=text;let at;while((at=pending.indexOf('\n'))>=0){onLine(pending.slice(0,at).trim());pending=pending.slice(at+1);}});}child.on('error',reject);child.on('close',code=>code===0?resolve():reject(Error(signal?.aborted?'Dublagem pausada. Os trechos concluídos foram salvos.':tail.slice(-1800)||'O motor de voz não iniciou.')));});}
 function runtimeEnv(){return{UV_CACHE_DIR:path.join(ROOT,'cache'),UV_PYTHON_INSTALL_DIR:path.join(ROOT,'python'),UV_LINK_MODE:'copy',PYTHONUTF8:'1',TOKENIZERS_PARALLELISM:'false'};}
