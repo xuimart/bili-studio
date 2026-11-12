@@ -5,6 +5,7 @@ const audioLanguages={auto:'detecção automática',en:'inglês fixo',zh:'mandar
 const labels={done:'Pronto · com áudio',queued:'Na fila',paused:'Pausado',error:'Precisa de atenção',downloading:'Baixando',merging:'Reunindo vídeo + áudio',checking:'Conferindo áudio'};
 const setText=(id,value)=>{if($(id).textContent!==String(value))$(id).textContent=value;};
 function duration(n){n=Math.round(n||0);return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');}
+function totalDuration(entries){let seconds=0,unknown=0;for(const entry of entries){const n=Number(entry.duration);if(Number.isFinite(n)&&n>0)seconds+=n;else unknown++;}seconds=Math.round(seconds);const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60,text=[h?h+'h':'',m?m+'min':'',s||!h&&!m?s+'s':''].filter(Boolean).join(' ');return unknown?(seconds?text+' + ':'')+unknown+' '+(unknown===1?'vídeo sem duração':'vídeos sem duração'):text;}
 function notify(message,error=false){setText('notice',message);$('notice').hidden=false;$('notice').className='notice'+(error?' error':'');}
 async function api(route,body){const r=await fetch('/api/'+route,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||'Não foi possível concluir.');return data;}
 function settings(){return{folder:$('folder').value.trim(),quality:$('quality').value,cookieFile:$('cookies').value.trim()};}
@@ -19,6 +20,7 @@ function selection(){
  if(p.dubbing){p.subtitles=true;p.subtitleLanguage='pt';$('with-subtitles').checked=true;$('subtitle-language').value='pt';}
  $('with-dubbing').disabled=lock;$('dubbing-voice').disabled=lock;$('calibrate-voice').disabled=lock||state?.busy||state?.queueEnabled||state?.operation?.status==='running';setText('calibrate-voice',state?.operation?.type==='dubbing-calibration'&&state.operation.status==='running'?'Medindo velocidade…':'Testar velocidade neste computador');setText('dubbing-estimate',dubbingEstimate(entries.filter(e=>selected.has(e.id)).reduce((n,e)=>n+(Number(e.duration)||0),0)));
  setText('selected-count',count+' selecionados');$('select-all').checked=!!entries.length&&count===entries.length;$('select-all').indeterminate=count>0&&count<entries.length;
+ setText('playlist-duration','Total: '+(entries.length?totalDuration(entries):'—'));setText('selected-duration','Tempo selecionado: '+totalDuration(entries.filter(e=>selected.has(e.id))));
  for(const id of ['url','folder','quality','cookies','choose-folder','choose-cookies','analyze','select-all','select-ready','output-separate','with-merge','with-subtitles'])$(id).disabled=lock;
  $('with-subtitles').disabled=lock||p.dubbing;$('source-language').disabled=lock||!p.subtitles;$('subtitle-language').disabled=lock||!p.subtitles||p.dubbing;$('subtitle-options').classList.toggle('disabled',!p.subtitles);
  $('with-summary').disabled=lock||!p.merge||!p.subtitles;
