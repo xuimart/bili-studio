@@ -40,6 +40,18 @@ work=pathlib.Path(request['work']);work.mkdir(parents=True,exist_ok=True);sr=mod
 voice=request.get('voice','male');anchor=pathlib.Path(request.get('anchor',str(work.parent/('voice-'+voice+'.wav'))))
 anchor_text='Vamos observar a construção deste personagem. Primeiro, simplificamos as formas. Depois, ajustamos as proporções e refinamos os detalhes.'
 def array(audio):return (audio.detach().cpu().float().numpy() if hasattr(audio,'detach') else np.asarray(audio)).reshape(-1).astype(np.float32)
+
+def valid_voice(audio):
+    return len(audio)>0 and np.isfinite(audio).all() and float(np.sqrt(np.mean(audio*audio)))>=.0001
+
+def synthesize_valid_audio(generate,seed,on_retry=lambda attempt:None):
+    # A silent sample must not be reproduced forever with the same seed on resume.
+    for attempt in range(3):
+        actual_seed=seed+attempt*104729
+        audio=np.asarray(generate(actual_seed),dtype=np.float32).reshape(-1)
+        if valid_voice(audio):return audio,attempt+1,actual_seed
+        if attempt<2:on_retry(attempt+2)
+    return None,3,None
 def clean_pauses(audio,sr):
     """Trim quiet edges and only the excess of long synthetic internal gaps."""
     frame=max(1,round(sr*.02));rms=np.array([np.sqrt(np.mean(audio[i:i+frame]**2)) for i in range(0,len(audio),frame)])
@@ -61,7 +73,7 @@ def fit_bounds(segment,previous_end,next_start,duration,natural_seconds):
     if natural_seconds>end-start:start=max(earliest,end-natural_seconds)
     return start,end
 def regroup(segments,index):
-    def compatible(a,b):return b['start']-a['end']<=2 and b['end']-a['start']<=24 and len((a['text']+' '+b['text']).split())<=80
+    def compatible(a,b):return b['start']-a['end']<=2 and b['end']-a['start']<=36 and len((a['text']+' '+b['text']).split())<=120
     if index+1<len(segments) and compatible(segments[index],segments[index+1]):first=index
     elif index>0 and compatible(segments[index-1],segments[index]):first=index-1
     else:return None
@@ -96,15 +108,23 @@ while index<len(segments):
             if previous.with_suffix('.json').is_file():shutil.copyfile(previous.with_suffix('.json'),output.with_suffix('.json'))
             cached=True
     emit(phase=f'Gerando voz em português · {index+1} de {len(segments)}',progress=complete/total*100,completedSpeechSeconds=complete,totalSpeechSeconds=total,synthesisSeconds=synthesis_seconds,measuredSpeechSeconds=measured_speech)
-    started=time.monotonic();tempo=1.0;adjustments={};rewrite=not cached
+    started=time.monotonic();tempo=1.0;adjustments={};attempts=1;actual_seed=None
     if cached:
-        audio,rate=sf.read(str(output),dtype='float32');assert rate==sr
-        try:details=json.loads(output.with_suffix('.json').read_text());tempo=details['tempo'];adjustments=details['pauseAdjustments']
-        except (OSError,ValueError,KeyError):pass
-    else:
-        torch.manual_seed(2026+index)
-        audio=array(model.generate(text=segment['text'],language='Portuguese',voice_clone_prompt=prompt,speed=1.0,num_step=32,postprocess_output=False)[0])
-        if not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('O motor gerou uma fala silenciosa ou inválida.')
+        try:
+            audio,rate=sf.read(str(output),dtype='float32');cached=rate==sr and valid_voice(audio)
+        except (RuntimeError,ValueError,OSError):cached=False
+        if cached:
+            try:details=json.loads(output.with_suffix('.json').read_text());tempo=details['tempo'];adjustments=details['pauseAdjustments'];attempts=details.get('synthesisAttempts',1);actual_seed=details.get('seed')
+            except (OSError,ValueError,KeyError):pass
+    rewrite=not cached
+    if not cached:
+        def generate_attempt(seed):
+            torch.manual_seed(seed)
+            return array(model.generate(text=segment['text'],language='Portuguese',voice_clone_prompt=prompt,speed=1.0,num_step=32,postprocess_output=False)[0])
+        audio,attempts,actual_seed=synthesize_valid_audio(generate_attempt,2026+index,lambda attempt:emit(phase=f'Refazendo fala {index+1} · tentativa {attempt} de 3 · áudio anterior inválido',progress=complete/total*100))
+        if audio is None:
+            if retry_group():continue
+            raise RuntimeError(f'Não foi possível gerar voz válida em {segment["start"]:.2f}s após 3 tentativas e reagrupamento. Revise a fala; os arquivos anteriores foram preservados.')
         audio,adjustments=clean_pauses(audio,sr)
     effective_start,maximum_end=fit_bounds(segment,results[-1]['actualEnd'] if results else None,segments[index+1]['start'] if index+1<len(segments) else request['duration'],request['duration'],len(audio)/sr)
     available=int(maximum_end*sr+1e-5)-round(effective_start*sr)
@@ -126,7 +146,7 @@ while index<len(segments):
     if rewrite:
         ramp=min(round(sr*.01),len(audio)//2);audio[:ramp]*=np.linspace(0,1,ramp);audio[-ramp:]*=np.linspace(1,0,ramp)
         rms=float(np.sqrt(np.mean(audio*audio)));audio*=min(.07943/max(rms,.0001),.88/max(float(np.max(np.abs(audio))),.0001));sf.write(str(output)+'.tmp.wav',audio,sr,subtype='PCM_16');os.replace(str(output)+'.tmp.wav',output)
-        output.with_suffix('.json').write_text(json.dumps({'tempo':tempo,'pauseAdjustments':adjustments}),encoding='utf8')
+        output.with_suffix('.json').write_text(json.dumps({'tempo':tempo,'pauseAdjustments':adjustments,'synthesisAttempts':attempts,'seed':actual_seed}),encoding='utf8')
     if len(audio)>available or not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('Fala inválida no checkpoint; original preservado.')
     elapsed=time.monotonic()-started
     if not cached:synthesis_seconds+=elapsed;measured_speech+=duration
