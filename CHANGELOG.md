@@ -1,5 +1,10 @@
 # Histórico
 
+## 4.3.1 — 2026-11-12
+
+- Mostra a duração total da playlist no cabeçalho e a soma dos vídeos selecionados ao lado da contagem. A seleção atualiza a soma imediatamente, em horas, minutos e segundos.
+- Vídeos sem duração conhecida são sinalizados, sem inventar tempo para eles.
+
 ## 4.3.0 — 2026-11-12
 
 - Escolha explícita entre Aula por aula (MP4 separados) e Uma aula completa (MP4 unido com capítulos), preservada por item da fila.

@@ -1,4 +1,4 @@
-# Compatibilidade e evidências — 4.3.0
+# Compatibilidade e evidências — 4.3.1
 
 Validado em **12 de novembro de 2026**, Windows 11 x64, Electron 45.2.3, FFmpeg 9.0.2. Os relatórios brutos ficam localmente em `data/`; não publicamos a biblioteca pessoal do usuário. Estes testes não certificam toda máquina, todo conteúdo ou futuras mudanças do Bilibili.
 
@@ -90,3 +90,5 @@ O planejador foi aplicado às 11 bibliotecas locais sem gerar dublagens completa
 Fixtures de duas aulas verificam a ordem legenda/tradução → voz → próxima aula, MP4 e VTT servidos por GET/range enquanto a segunda continua, recusa de mídia em alteração, falha/cancelamento com a primeira preservada e retomada sem repetir a primeira. O modo unido continua processando apenas o resultado final. Snapshots inválidos por mudança de legenda, vídeo, voz ou motor não são reaproveitados.
 
 O renderer real selecionou os dois modos, abriu e reproduziu um MP4 sintético legendado durante a preparação da segunda aula e manteve o mesmo player/tempo durante polling e liberação da segunda. O teste confere também liberação do arquivo ao fechar. Estes ensaios usam etapas de transcrição/voz simuladas para testar a coordenação; não representam uma nova execução integral de bibliotecas de horas. As provas reais do motor de dublagem permanecem descritas acima.
+
+Na 4.3.1, o renderer confere a duração total e selecionada com todos, nenhum e apenas um vídeo marcado, atualização após polling, horas/minutos/segundos e aviso de duração desconhecida. A mudança é de apresentação; não altera o pipeline de mídia ou os arquivos.
