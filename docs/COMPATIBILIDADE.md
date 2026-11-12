@@ -1,4 +1,4 @@
-# Compatibilidade e evidências — 4.3.1
+# Compatibilidade e evidências — 4.3.2
 
 Validado em **12 de novembro de 2026**, Windows 11 x64, Electron 45.2.3, FFmpeg 9.0.2. Os relatórios brutos ficam localmente em `data/`; não publicamos a biblioteca pessoal do usuário. Estes testes não certificam toda máquina, todo conteúdo ou futuras mudanças do Bilibili.
 
@@ -61,7 +61,7 @@ O teste gera arquivos reais com vídeo e sinal sonoro conhecido. Cada entrada pa
 
 ## Outros testes
 
-- **155 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio. Regressões de dublagem cobrem “por meio”, verbo/complemento e divisão em pontuação sem perder palavras.
+- **156 testes automatizados**, sem falhas ou skips na máquina de validação: links, fila, isolamento da API, mídia, retomada, legendas, tradução, sumário, PDF/HTML, persistência, importação, seletor nativo, componentes e bloqueio de instalação durante trabalhos. Inclui leitura limitada de tempos legados e PDF principal ao lado do vídeo, com backups em Arquivos de apoio. Regressões de dublagem cobrem “por meio”, verbo/complemento e divisão em pontuação sem perder palavras.
 - PDF real de 12 páginas: 100 anotações de link e 100 destinos únicos conferidos contra a fonte, sem caminhos pessoais no endereço. Revisão visual de páginas inicial, intermediária e final. O desktop testa recebimento do link, abertura da prévia e busca no player real, além da presença de link no PDF empacotado. A política de abertura de protocolos depende do leitor PDF; não foi homologado todo leitor disponível.
 - Sumário real de aproximadamente 11h41 com 100 blocos. IDs e citações foram validados na legenda; tempos ficaram dentro do vídeo. O renderer testou clique/seek em vídeo real sintético. Isto não equivale a revisão humana integral da transcrição ou dos assuntos.
 - App Electron empacotado em perfil vazio, fora da pasta de fontes: interface pronta e dados separados da instalação. O teste desktop também reproduz MP4 e decodifica AAC dentro do Chromium incorporado.
@@ -92,3 +92,9 @@ Fixtures de duas aulas verificam a ordem legenda/tradução → voz → próxima
 O renderer real selecionou os dois modos, abriu e reproduziu um MP4 sintético legendado durante a preparação da segunda aula e manteve o mesmo player/tempo durante polling e liberação da segunda. O teste confere também liberação do arquivo ao fechar. Estes ensaios usam etapas de transcrição/voz simuladas para testar a coordenação; não representam uma nova execução integral de bibliotecas de horas. As provas reais do motor de dublagem permanecem descritas acima.
 
 Na 4.3.1, o renderer confere a duração total e selecionada com todos, nenhum e apenas um vídeo marcado, atualização após polling, horas/minutos/segundos e aviso de duração desconhecida. A mudança é de apresentação; não altera o pipeline de mídia ou os arquivos.
+
+## Encaixe adaptativo e tela cheia — 4.3.2
+
+Dez testes Python de energia, aproveitamento limitado de pausas, preservação da primeira âncora e reagrupamento. O caso real que falhava (1,28 s de fala numa legenda de 0,70 s) foi gerado com ritmo natural, usando 0,58 s livres depois da janela e sem aceleração. A preparação da voz de uma aula real de aproximadamente 12 minutos concluiu 91 blocos, reutilizando oito; o preparo não alterou a fonte. Duas fixtures com síntese real exercitaram junção com a próxima fala e retorno à anterior, conservação das palavras e segunda execução inteiramente em cache. Isso não certifica toda tradução ou toda aula de horas.
+
+O aplicativo empacotado entrou em tela cheia com o elemento de vídeo, confirmou a janela em modo fullscreen e retornou à janela normal pela API. A política foi testada com origem local, origem externa, outra porta, subframe e permissões distintas; somente a tela cheia local foi permitida.

@@ -2,8 +2,9 @@
 import ast,pathlib,unittest,numpy as np
 source=pathlib.Path(__file__).resolve().parents[1]/'dubbing-worker.py'
 tree=ast.parse(source.read_text(encoding='utf8'))
-definitions=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='clean_pauses'],type_ignores=[])
+definitions=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ['clean_pauses','fit_bounds','regroup']],type_ignores=[])
 scope={'np':np};exec(compile(definitions,str(source),'exec'),scope);clean=scope['clean_pauses']
+fit_bounds=scope['fit_bounds'];regroup=scope['regroup']
 
 class PauseSafety(unittest.TestCase):
     sr=24000
@@ -23,5 +24,21 @@ class PauseSafety(unittest.TestCase):
         self.assertEqual(report['internalGaps'],0);np.testing.assert_array_equal(out,audio)
     def test_silence_is_rejected(self):
         with self.assertRaises(RuntimeError):clean(self.quiet(3),self.sr)
+    def test_actual_reported_short_slot_uses_available_gap(self):
+        start,end=fit_bounds({'start':46.7,'end':47.4},45.2,49.077,720,1.28)
+        self.assertEqual(start,46.7);self.assertGreaterEqual(end-start,1.28);self.assertLessEqual(end,48.4)
+    def test_borrowing_never_overlaps_previous_or_moves_more_than_one_second(self):
+        start,end=fit_bounds({'start':10,'end':11},9.4,11,20,2)
+        self.assertGreaterEqual(start,9.43);self.assertGreaterEqual(start,9);self.assertLessEqual(end,11)
+    def test_first_speech_does_not_start_before_its_anchor(self):
+        start,end=fit_bounds({'start':7.6,'end':10},None,10,20,4)
+        self.assertEqual(start,7.6);self.assertEqual(end,10)
+    def test_regroup_preserves_words_and_outer_anchors(self):
+        segments=[{'start':1,'end':1.7,'text':'Usando um'},{'start':3,'end':5,'text':'retângulo como referência.'}]
+        self.assertEqual(regroup(segments,0),0);self.assertEqual(segments,[{'start':1,'end':5,'text':'Usando um retângulo como referência.'}])
+    def test_regroup_can_rewind_but_respects_long_pauses(self):
+        segments=[{'start':1,'end':3,'text':'Vamos observar'},{'start':3,'end':3.7,'text':'isso.'}]
+        self.assertEqual(regroup(segments,1),0);self.assertEqual(len(segments),1)
+        self.assertIsNone(regroup([{'start':1,'end':3,'text':'Primeiro.'},{'start':9,'end':10,'text':'Depois.'}],1))
 
 if __name__=='__main__':unittest.main()

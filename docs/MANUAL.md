@@ -79,6 +79,10 @@ Na primeira vez, o aplicativo prepara Python, OmniVoice, PyTorch e os modelos no
 
 O encaixe usa os tempos da legenda e detecção de fala, com frases completas e ritmo natural. Não estica uma fala curta para preencher um intervalo longo. Silêncios sintéticos excedentes são aparados; se necessário, a fala pode ser acelerada em até 25%, preservando o tom. Se ainda não couber, o programa pede revisão do trecho, preservando o original. Intervalos livres ficam depois da frase completa, sem deslocar as próximas entradas ou encurtar o vídeo. Legendas com tempos ou termos incorretos prejudicam o resultado. A voz é sintética; não copia a voz do professor. A dublagem remove música/ruídos junto com o áudio anterior e não realiza sincronização labial.
 
+Falas curtas também podem aproveitar o espaço livre ao redor e ser reagrupadas com frases vizinhas antes de o programa pedir revisão. O trabalho de voz compatível já salvo é reaproveitado. Quando uma tentativa falha, **Assistir original · dublagem pendente** deixa explícito que o áudio ainda não foi substituído; use **Retomar dublagem** para concluir.
+
+No player, use **Tela cheia** ou o ícone do próprio vídeo para ocupar a tela. **Esc** retorna à prévia. A tela cheia não pausa o processamento das outras aulas.
+
 Pode cancelar e retomar: falas concluídas ficam em checkpoint. O programa verifica o MP4 antes de substituir, preserva a versão anterior e mantém um diário para recuperar uma publicação interrompida. Limite desta versão: 24 horas por arquivo.
 
 ## Fechar, atualizar e recuperar

@@ -4,7 +4,7 @@
 
 O processo principal do Electron cria uma `BrowserWindow` própria e inicia o backend Node local. O runtime é incluído no instalador. O usuário não depende de Node, Python, Edge ou de um serviço hospedado. A interface usa Chromium incorporado ao aplicativo; não é uma interface Win32 escrita em C++.
 
-O backend escuta exclusivamente em `127.0.0.1`, em porta aleatória no desktop. Usa cookie de sessão HttpOnly, SameSite=Strict, validação de Host e Origin e CSP. O renderer tem `nodeIntegration:false`, `contextIsolation:true`, `sandbox:true`, permissões negadas e navegação externa restrita. Não há ponte IPC que exponha shell ou sistema de arquivos ao renderer. Diálogos nativos são chamados pelo backend através de uma função injetada pelo processo principal.
+O backend escuta exclusivamente em `127.0.0.1`, em porta aleatória no desktop. Usa cookie de sessão HttpOnly, SameSite=Strict, validação de Host e Origin e CSP. O renderer tem `nodeIntegration:false`, `contextIsolation:true`, `sandbox:true` e navegação externa restrita. A política de permissões permite apenas `fullscreen` para a própria janela e origem local, com verificação de frame; pedidos automáticos e demais permissões permanecem negados. Não há ponte IPC que exponha shell ou sistema de arquivos ao renderer. Diálogos nativos são chamados pelo backend através de uma função injetada pelo processo principal.
 
 ## Módulos
 
@@ -84,6 +84,8 @@ PDFs são impressos por uma BrowserWindow oculta, com sandbox e sem Node; não d
 O worker gera cada fala com `speed=1.0` e sem duração fixa. Analisa energia em quadros de 20 ms, apara bordas quietas e reduz somente o excedente de pausas internas de pelo menos 900 ms, conservando 400 ms. Respirações curtas e áudio de baixa intensidade acima do limiar adaptativo permanecem. Falas que excedem a janela passam por `atempo`, sem alteração do tom e com limite de 1,25; excessos maiores são recusados, sem truncar palavras. Silêncio remanescente fica após a frase, mantendo as próximas âncoras. Checkpoints registram duração real, ajuste de velocidade e silêncio removido; o fingerprint inclui motor, modelo, voz, texto, janela e hash da referência sintética. Mudança de motor invalida cache e calibração antigos.
 
 O WAV é montado em streaming, evitando manter aulas inteiras na RAM. WAVs por fala têm escrita atômica. FFmpeg copia a imagem/capítulos e mapeia apenas o áudio novo. O arquivo temporário fica no mesmo volume do destino; verificação precede troca, com backup e rollback. `publish.json` recupera uma troca interrompida antes/depois da renomeação, verificando caminhos, tamanho e modificação. A versão limita arquivos a 24 horas e depende da qualidade da legenda; não realiza alinhamento semântico/labial perfeito.
+
+O encaixe adaptativo mede o WAV antes de decidir se uma fala cabe. Pode aproveitar até um segundo livre por borda, respeitando a fala anterior e a âncora da próxima, sem antecipar a primeira entrada. Se isso e o ajuste limitado de velocidade não bastarem, combina a fala com uma vizinha (intervalo de até dois segundos, bloco máximo de 24 segundos/80 palavras) e sintetiza novamente; pode voltar um bloco sem publicar áudio parcial. O plano é salvo atomicamente em `fit-plan.json`, com hash da entrada e validação de texto/tempos na retomada. O fingerprint de publicação inclui a versão do encaixe. Checkpoints da versão anterior só são importados quando o hash da fala, modelo, voz, referência e janela coincide. A montagem valida ausência de sobreposição. Conteúdo realmente excessivo ainda pede revisão da tradução.
 
 ## Limites
 

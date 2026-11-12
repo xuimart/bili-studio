@@ -188,7 +188,7 @@ function createApp(options = {}) {
           try{item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:lessonProgress(from+(to-from)*(p.progress||0)/100),estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
           catch(error){item.dubbingStatus=signal.aborted?'paused':'error';item.dubbingError=error.message;throw error;}persist(true);
           }
-          if(hasCaptions||hasDubbing){item.processingDelivery=lessons.complete(item,{...processing,subtitles:hasCaptions||processing.subtitles,dubbing:hasDubbing});update({completed:index+1,progress:lessonProgress(lessonEnd),phase:'Aula '+(index+1)+' pronta para assistir'});persist(true);}
+          if(hasCaptions||hasDubbing){item.processingDelivery=lessons.complete(item,{...processing,language,subtitles:hasCaptions||!!processing.subtitles||type==='dubbing'&&!!item.subtitles,subtitleLanguage:processing.subtitleLanguage||(type==='dubbing'?'pt':'original'),dubbing:hasDubbing});update({completed:index+1,progress:lessonProgress(lessonEnd),phase:'Aula '+(index+1)+' pronta para assistir'});persist(true);}
           currentLesson=null;
         }
         if(hasSummary)for(const item of captionItems.filter(i=>i.type==='merged')){

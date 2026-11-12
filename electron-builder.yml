@@ -33,6 +33,7 @@ files:
   - desktop/main.cjs
   - desktop/migration.cjs
   - desktop/update-policy.cjs
+  - desktop/permissions.cjs
   - desktop/deep-links.cjs
   - desktop/summary-pdf.cjs
   - desktop/icon.png

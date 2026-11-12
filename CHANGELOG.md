@@ -1,5 +1,12 @@
 # Histórico
 
+## 4.3.2 — 2026-11-12
+
+- Corrige falas curtas que falhavam mesmo havendo espaço livre: o encaixe usa a duração realmente gerada e até um segundo de espaço livre por borda, sem sobreposição.
+- Se necessário, reagrupa falas vizinhas e salva o plano para retomada, mantendo o limite de aceleração e todas as palavras. Reaproveita checkpoints anteriores compatíveis.
+- Corrige a tela cheia do vídeo, antes negada pela política de permissões. Adiciona botão Tela cheia e mantém as demais permissões bloqueadas.
+- Identifica claramente quando o player abre o áudio original por uma dublagem pendente e oferece Retomar dublagem. Conclusões manuais registram também a legenda já pronta, para não repetir o trabalho na retomada do workflow.
+
 ## 4.3.1 — 2026-11-12
 
 - Mostra a duração total da playlist no cabeçalho e a soma dos vídeos selecionados ao lado da contagem. A seleção atualiza a soma imediatamente, em horas, minutos e segundos.

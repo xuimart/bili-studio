@@ -3,7 +3,7 @@ async function main(){
   const dir=path.resolve(process.argv[2]||'release'),p=require('../package.json');
   const asar=await import('@electron/asar'),file=path.join(dir,'win-unpacked','resources','app.asar');
   const files=asar.listPackage(file).map(n=>n.replaceAll('\\','/'));
-  for(const name of ['/server.cjs','/desktop/main.cjs','/desktop/deep-links.cjs','/desktop/summary-pdf.cjs','/summary-document.cjs','/lesson-delivery.cjs','/dubbing.cjs','/dubbing-runtime.cjs','/dubbing-worker.py','/runtime-tools.cjs','/library-files.cjs','/topic-summary.cjs','/public/app.js'])assert.ok(files.includes(name),'Ausente: '+name);
+  for(const name of ['/server.cjs','/desktop/main.cjs','/desktop/permissions.cjs','/desktop/deep-links.cjs','/desktop/summary-pdf.cjs','/summary-document.cjs','/lesson-delivery.cjs','/dubbing.cjs','/dubbing-runtime.cjs','/dubbing-worker.py','/runtime-tools.cjs','/library-files.cjs','/topic-summary.cjs','/public/app.js'])assert.ok(files.includes(name),'Ausente: '+name);
   for(const name of files)assert.ok(!/^\/(?:data|downloads|bin)(?:\/|$)/.test(name)&&!/(?:^|\/)(?:cookies[^/]*|\.env|runtime\.json|state\.json|.*\.pfx)$/.test(name),'Dado privado no pacote: '+name);
   for(const name of files.filter(n=>!n.startsWith('/node_modules/')&&/\.(?:cjs|js|json|py)$/.test(n))){
     const text=asar.extractFile(file,name.slice(1)).toString();assert.ok(!/C:[\\/]+Users[\\/]+rafi_/i.test(text),'Caminho pessoal: '+name);assert.ok(!/gh[pousr]_[A-Za-z0-9]{24,}/.test(text),'Credencial no pacote: '+name);
