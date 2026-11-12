@@ -15,6 +15,7 @@ O backend escuta exclusivamente em `127.0.0.1`, em porta aleatória no desktop. 
 | `runtime-paths.cjs` | Separação entre fontes, dados graváveis, componentes e downloads |
 | `runtime-tools.cjs` | Instalação de ferramentas oficiais com SHA-256, retentativas e fontes alternativas do distribuidor FFmpeg |
 | `server.cjs` | API, seleção, fila persistente, retomada e coordenação do processamento |
+| `lesson-delivery.cjs` | Entrega por aula, disponibilidade de reprodução e reaproveitamento validado |
 | `library.cjs` | Normalização de URLs, redirecionamentos b23, descoberta de partes/coleções e adaptador yt-dlp |
 | `fast-download.cjs` | Download por ranges, backups de CDN e prefixo contíguo retomável; fallback para yt-dlp |
 | `media.cjs` | ffprobe, validação, MP4 H.264/AAC, tone mapping HDR, união e capítulos |
@@ -51,6 +52,14 @@ Cada movimento é gravado antes da renomeação em `library-files-journal.json` 
 Atualizações e desinstalação não removem os dados do perfil nem os vídeos. Não modificar appId, nome do aplicativo, diretórios ou política de dados numa release sem preparar migração. Importações guardam o estado anterior e só são aplicadas na próxima abertura. Novos campos no estado devem ser opcionais e manter compatibilidade com os estados anteriores.
 
 ## Tradução
+
+### Entrega aula por aula
+
+No workflow sem união, os downloads da seleção terminam antes do processamento. Depois, um único loop conclui transcrição/tradução e dublagem de cada item, na ordem selecionada. O progresso global combina índice da aula com a etapa corrente; `operation.completed` conta aulas preparadas. No modo unido, a união antecede esse loop e ele recebe apenas o resultado final.
+
+`processingDelivery` é opcional, compatível com históricos anteriores. Registra opções, pendência/execução/conclusão/falha/pausa e snapshot de tamanho/modificação, hash da legenda completa e fingerprint da voz. O workflow só pula uma aula concluída se opções e snapshot continuarem compatíveis, com motor/voz atuais e arquivos de legenda presentes. Operações manuais de refazer continuam explícitas. Uma retomada não reprocessa aulas anteriores válidas.
+
+O estado público fornece `playbackReady`, `playbackLabel` e eventual aviso da versão preservada. A API recusa mídia pendente/em alteração mesmo que o download já tenha terminado; falhas mantêm acesso à versão anterior com aviso. A UI oferece atalhos por episódio, histórico e seleção atual. Polling atualiza rótulos e progresso sem recarregar o player. Ao fechar a prévia, o renderer remove o `src` e libera a mídia. Se a aula aberta voltar ao processamento, fecha o player antes da publicação. Reproduzir uma aula pronta usa GET autenticado/range e não interfere na operação das outras.
 
 Ollama usa uma instância local em `127.0.0.1:11435`, sem alterar a configuração do serviço padrão em `11434`. Modelos instalados são reutilizados; o primeiro preparo automático usa Qwen2.5 3B. A tradução valida caracteres latinos, IDs, completude de JSON e repetições. Quatro workers usam contexto fixo e transporte HTTP com conexões novas e recuperação limitada. A transcrição e a tradução completas não são substituídas pela versão concisa de exibição.
 

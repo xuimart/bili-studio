@@ -116,7 +116,7 @@ test('fluxo único baixa, junta na ordem e traduz somente o vídeo final quando 
       const child=new EventEmitter();child.stdout=new PassThrough();child.stderr=new PassThrough();
       setTimeout(()=>{const output=path.join(args.find(a=>a.startsWith('home:')).slice(5),args[args.indexOf('-o')+1].replace('.%(ext)s','.mp4'));fs.writeFileSync(output,'fake');steps.push('download');child.stdout.write('@@FILE@@'+JSON.stringify(output)+'\n');setTimeout(()=>child.emit('close',0),5);},5);return child;
     },
-    mergeMedia:async items=>{steps.push('merge');assert.deepEqual(items.map(i=>i.index),[1,3]);return{id:'merged',sourceIds:items.map(i=>i.id),status:'done',output:path.join(dataDir,'merged.mp4')};},
+    mergeMedia:async items=>{steps.push('merge');assert.deepEqual(items.map(i=>i.index),[1,3]);const output=path.join(dataDir,'merged.mp4');fs.writeFileSync(output,'merged fixture');return{id:'merged',sourceIds:items.map(i=>i.id),status:'done',output};},
     transcribeMedia:async(item,language)=>{steps.push('whisper');assert.equal(item.id,'merged');assert.equal(language,'en');return{language:'en',srt:'original'};},
     translateCaptions:async original=>{steps.push('translate');assert.equal(original.srt,'original');return{language:'pt',srt:'translated'};}
   });

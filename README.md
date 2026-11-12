@@ -28,6 +28,7 @@ Não precisa instalar Node.js, Python, FFmpeg ou Ollama manualmente. As ferramen
 - MP4 unido e SRT com o nome da playlist; episódios separados e arquivos de apoio organizados em subpastas.
 - Legendas SRT/VTT, detecção de idioma e tradução local para PT-BR.
 - Dublagem local opcional em português, com teste de velocidade no computador, estimativa de tempo e original preservado.
+- Escolha entre **Aula por aula** e **Uma aula completa**. No modo separado, conclui legenda/dublagem de cada aula e libera **Assistir** enquanto prepara as próximas.
 - Sumário automático por assuntos depois da união e da legenda, com tempos clicáveis e cópia Markdown em Arquivos de apoio.
 - PDF principal ao lado do vídeo e SRT; HTML e fontes em Arquivos de apoio. Assunto ou horário abre o aplicativo no trecho correspondente.
 - Legendas de exibição com até duas linhas de 42 caracteres e blocos de até seis segundos. A tradução completa fica preservada separadamente.

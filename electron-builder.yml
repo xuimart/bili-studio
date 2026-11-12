@@ -19,6 +19,7 @@ files:
   - speech.cjs
   - translate.cjs
   - subtitle-delivery.cjs
+  - lesson-delivery.cjs
   - library-files.cjs
   - topic-summary.cjs
   - dubbing.cjs
