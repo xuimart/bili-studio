@@ -1,5 +1,5 @@
 """Local TTS worker. Original Bili Studio code; uses the public OmniVoice API."""
-import os,sys,json,time,pathlib,hashlib,wave,platform,subprocess
+import os,sys,json,time,pathlib,hashlib,wave,platform,subprocess,shutil
 request=json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
 if os.environ.get('BILI_TEST_TTS_PROJECT'):sys.path.insert(0,os.environ['BILI_TEST_TTS_PROJECT'])
 os.environ['HF_HOME']=request['cache'];os.environ['HF_HUB_CACHE']=request['cache'];os.environ['TOKENIZERS_PARALLELISM']='false'
@@ -55,16 +55,48 @@ def clean_pauses(audio,sr):
     pieces=[];position=0;removed=0
     for start,end in ranges:pieces.append(audio[position:start]);position=end;removed+=end-start
     pieces.append(audio[position:]);return np.concatenate(pieces),{'edgesSeconds':edges/sr,'internalSeconds':removed/sr,'internalGaps':len(ranges)}
+def fit_bounds(segment,previous_end,next_start,duration,natural_seconds):
+    start=segment['start'];end=segment['end']+min(1.0,max(0,next_start-segment['end']-.03));end=min(duration,end)
+    earliest=max(0,start-1.0,min(start,previous_end+.03)) if previous_end is not None else start
+    if natural_seconds>end-start:start=max(earliest,end-natural_seconds)
+    return start,end
+def regroup(segments,index):
+    def compatible(a,b):return b['start']-a['end']<=2 and b['end']-a['start']<=24 and len((a['text']+' '+b['text']).split())<=80
+    if index+1<len(segments) and compatible(segments[index],segments[index+1]):first=index
+    elif index>0 and compatible(segments[index-1],segments[index]):first=index-1
+    else:return None
+    a,b=segments[first:first+2];segments[first:first+2]=[{**a,'end':b['end'],'text':a['text'].strip()+' '+b['text'].strip()}];return first
 if not anchor.exists():
     emit(phase='Preparando voz sintética em português',progress=0)
     generated=model.generate(text=anchor_text,language='Portuguese',instruct=voice+', middle-aged, moderate pitch',num_step=32,speed=1.0)[0];sf.write(str(anchor),array(generated),sr,subtype='PCM_16')
 prompt=model.create_voice_clone_prompt(ref_audio=str(anchor),ref_text=anchor_text);anchor_hash=hashlib.sha256(anchor.read_bytes()).hexdigest()
 load_seconds=time.monotonic()-begin;hardware=device+':'+(torch.cuda.get_device_name(0) if device=='cuda' else platform.processor())
-segments=request['segments'];results=[];total=sum(s['end']-s['start'] for s in segments);complete=0;synthesis_seconds=0;measured_speech=0
-for index,segment in enumerate(segments):
+segments=[dict(s) for s in request['segments']];plan_file=work/'fit-plan.json';input_hash=hashlib.sha256(json.dumps(segments,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+try:
+    saved=json.loads(plan_file.read_text(encoding='utf8'));candidate=saved['segments'];same_text=' '.join(s['text'] for s in candidate).split()==' '.join(s['text'] for s in segments).split()
+    valid=candidate and all(s['start']>=0 and s['end']>s['start'] and s['end']<=request['duration']+.001 and (not i or s['start']>=candidate[i-1]['end']-.001) for i,s in enumerate(candidate))
+    if saved['inputHash']==input_hash and same_text and valid:segments=candidate
+except (OSError,ValueError,KeyError,TypeError):pass
+results=[];total=sum(s['end']-s['start'] for s in segments);complete=0;synthesis_seconds=0;measured_speech=0;index=0
+def retry_group():
+    global index,complete,total,results,synthesis_seconds,measured_speech
+    revised=regroup(segments,index)
+    if revised is None:return False
+    synthesis_seconds+=time.monotonic()-started
+    measured_speech-=sum(r['plannedDuration'] for r in results[revised:] if not r['cached']);results=results[:revised];complete=sum(r['plannedDuration'] for r in results);total=sum(s['end']-s['start'] for s in segments);index=revised
+    temp=plan_file.with_suffix('.tmp');temp.write_text(json.dumps({'inputHash':input_hash,'segments':segments},ensure_ascii=False),encoding='utf8');os.replace(temp,plan_file)
+    (work/'checkpoint.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf8');emit(phase='Reagrupando uma fala curta para caber com ritmo natural',progress=complete/total*100);return True
+while index<len(segments):
+    segment=segments[index]
     duration=segment['end']-segment['start'];expected=round(segment['end']*sr)-round(segment['start']*sr);key=hashlib.sha256(json.dumps([request['engine'],segment['text'],duration,expected,voice,request['modelRevision'],anchor_hash],ensure_ascii=False).encode()).hexdigest()[:20];output=work/(key+'.wav');cached=output.exists() and request.get('mode')!='benchmark'
+    if not cached and request.get('previousWork') and request.get('mode')!='benchmark':
+        previous=pathlib.Path(request['previousWork'])/(key+'.wav')
+        if previous.is_file():
+            shutil.copyfile(previous,output)
+            if previous.with_suffix('.json').is_file():shutil.copyfile(previous.with_suffix('.json'),output.with_suffix('.json'))
+            cached=True
     emit(phase=f'Gerando voz em português · {index+1} de {len(segments)}',progress=complete/total*100,completedSpeechSeconds=complete,totalSpeechSeconds=total,synthesisSeconds=synthesis_seconds,measuredSpeechSeconds=measured_speech)
-    started=time.monotonic();tempo=1.0;adjustments={}
+    started=time.monotonic();tempo=1.0;adjustments={};rewrite=not cached
     if cached:
         audio,rate=sf.read(str(output),dtype='float32');assert rate==sr
         try:details=json.loads(output.with_suffix('.json').read_text());tempo=details['tempo'];adjustments=details['pauseAdjustments']
@@ -74,24 +106,33 @@ for index,segment in enumerate(segments):
         audio=array(model.generate(text=segment['text'],language='Portuguese',voice_clone_prompt=prompt,speed=1.0,num_step=32,postprocess_output=False)[0])
         if not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('O motor gerou uma fala silenciosa ou inválida.')
         audio,adjustments=clean_pauses(audio,sr)
-        if len(audio)>expected:
-            ratio=len(audio)/expected
-            if ratio>1.25:
+    effective_start,maximum_end=fit_bounds(segment,results[-1]['actualEnd'] if results else None,segments[index+1]['start'] if index+1<len(segments) else request['duration'],request['duration'],len(audio)/sr)
+    available=int(maximum_end*sr+1e-5)-round(effective_start*sr)
+    if len(audio)>available:
+            ratio=len(audio)/available
+            if ratio*tempo>1.25:
+                if retry_group():continue
                 sf.write(str(work/'duration-review.wav'),audio,sr,subtype='PCM_16')
-                raise RuntimeError(f'A fala em {segment["start"]:.2f}s precisa de {len(audio)/sr:.2f}s naturais, mas tem {duration:.2f}s. Revise o tempo ou o texto; não cortamos palavras nem aceleramos mais de 25%.')
+                raise RuntimeError(f'A fala em {segment["start"]:.2f}s não coube após aproveitar pausas e reagrupar frases. Revise a tradução desse trecho; o original foi preservado.')
             if not request.get('ffmpeg'):raise RuntimeError('FFmpeg não está disponível para encaixar a fala.')
-            tempo=min(1.25,ratio*1.02);natural=work/'natural.tmp.wav';fitted=work/'fitted.tmp.wav';sf.write(str(natural),audio,sr,subtype='PCM_16')
-            subprocess.run([request['ffmpeg'],'-v','error','-y','-i',str(natural),'-af',f'atempo={tempo:.8f}','-ar',str(sr),'-ac','1',str(fitted)],check=True,capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+            adjustment=min(1.25/tempo,ratio*1.03);tempo*=adjustment;rewrite=True;natural=work/'natural.tmp.wav';fitted=work/'fitted.tmp.wav';sf.write(str(natural),audio,sr,subtype='PCM_16')
+            subprocess.run([request['ffmpeg'],'-v','error','-y','-i',str(natural),'-af',f'atempo={adjustment:.8f}','-ar',str(sr),'-ac','1',str(fitted)],check=True,capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
             audio,rate=sf.read(str(fitted),dtype='float32');assert rate==sr
-            if len(audio)>expected:raise RuntimeError('A fala excedeu o intervalo após o ajuste; original preservado.')
+            excess=len(audio)-available
+            if 0<excess<=sr*.06 and np.sqrt(np.mean(audio[-excess:]**2))<.003:audio=audio[:-excess]
+            if len(audio)>available:
+                if retry_group():continue
+                raise RuntimeError('A fala excedeu o intervalo após o ajuste; original preservado.')
+    if rewrite:
         ramp=min(round(sr*.01),len(audio)//2);audio[:ramp]*=np.linspace(0,1,ramp);audio[-ramp:]*=np.linspace(1,0,ramp)
         rms=float(np.sqrt(np.mean(audio*audio)));audio*=min(.07943/max(rms,.0001),.88/max(float(np.max(np.abs(audio))),.0001));sf.write(str(output)+'.tmp.wav',audio,sr,subtype='PCM_16');os.replace(str(output)+'.tmp.wav',output)
         output.with_suffix('.json').write_text(json.dumps({'tempo':tempo,'pauseAdjustments':adjustments}),encoding='utf8')
-    if len(audio)>expected or not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('Fala inválida no checkpoint; original preservado.')
+    if len(audio)>available or not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('Fala inválida no checkpoint; original preservado.')
     elapsed=time.monotonic()-started
     if not cached:synthesis_seconds+=elapsed;measured_speech+=duration
-    complete+=duration;results.append({**segment,'file':str(output),'actualDuration':len(audio)/sr,'actualEnd':segment['start']+len(audio)/sr,'tempo':tempo,'pauseAdjustments':adjustments,'synthesisSeconds':elapsed,'cached':cached})
+    complete+=duration;results.append({**segment,'originalStart':segment['start'],'start':effective_start,'plannedDuration':duration,'file':str(output),'actualDuration':len(audio)/sr,'actualEnd':effective_start+len(audio)/sr,'borrowedBefore':segment['start']-effective_start,'borrowedAfter':max(0,effective_start+len(audio)/sr-segment['end']),'tempo':tempo,'pauseAdjustments':adjustments,'synthesisSeconds':elapsed,'cached':cached})
     (work/'checkpoint.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
+    index+=1
 timeline=work/'voice.wav';position=0;zeros=b'\0'*sr*2
 with wave.open(str(timeline)+'.tmp','wb') as stream:
     stream.setnchannels(1);stream.setsampwidth(2);stream.setframerate(sr)
@@ -104,5 +145,5 @@ with wave.open(str(timeline)+'.tmp','wb') as stream:
     missing=round(request['duration']*sr)-position
     while missing>0:count=min(missing,sr);stream.writeframesraw(zeros[:count*2]);missing-=count
 os.replace(str(timeline)+'.tmp',timeline)
-result=dict(audio=str(timeline),sampleRate=sr,segments=results,loadSeconds=load_seconds,preparationSeconds=preparation_seconds,synthesisSeconds=synthesis_seconds,speechSeconds=total,measuredSpeechSeconds=measured_speech,hardware=hardware,engine=request['engine'],voice=voice,completedAt=time.time())
+result=dict(audio=str(timeline),sampleRate=sr,segments=results,fitVersion=2,loadSeconds=load_seconds,preparationSeconds=preparation_seconds,synthesisSeconds=synthesis_seconds,speechSeconds=total,measuredSpeechSeconds=measured_speech,hardware=hardware,engine=request['engine'],voice=voice,completedAt=time.time())
 (work/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8');emit(result=result)

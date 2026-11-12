@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {autoUpdater}=require('electron-updater');
 const {busy,canInstall,allowedExternal}=require('./update-policy.cjs');
 const {SCHEME,linkFromArgs,parseDeepLink}=require('./deep-links.cjs');
+const {allowFullscreen}=require('./permissions.cjs');
 const smoke=process.argv.includes('--smoke-test');
 if(process.env.BILI_TEST_PROFILE)app.setPath('userData',process.env.BILI_TEST_PROFILE);
 else if(process.platform==='win32'&&process.env.LOCALAPPDATA)app.setPath('userData',path.join(process.env.LOCALAPPDATA,'Bili Studio'));
@@ -92,7 +93,8 @@ async function start(){
 
   win.webContents.setWindowOpenHandler(({url})=>{if(allowedExternal(url))shell.openExternal(url);return {action:'deny'};});
   win.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==base){event.preventDefault();if(allowedExternal(url))shell.openExternal(url);}});
-  win.webContents.session.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));
+  win.webContents.session.setPermissionRequestHandler((wc,permission,callback,details)=>callback(wc===win.webContents&&allowFullscreen(permission,details?.requestingUrl||wc.getURL(),base,details?.isMainFrame)));
+  win.webContents.session.setPermissionCheckHandler((wc,permission,origin,details)=>wc===win.webContents&&allowFullscreen(permission,details?.requestingUrl||origin,base,details?.isMainFrame));
   win.on('close',async e=>{
     if(quitting)return;e.preventDefault();
     if(busy(backend.state)){
@@ -124,10 +126,14 @@ async function start(){
     const target=require('./deep-links.cjs').timeLink('export-smoke',.5);app.emit('second-instance',{},[process.execPath,target]);
     let deepLink;const linkDeadline=Date.now()+15000;do{deepLink=await win.webContents.executeJavaScript('({open:document.querySelector("#preview-dialog").open,title:document.querySelector("#preview-title").textContent,time:document.querySelector("#player").currentTime})');if(deepLink.open&&deepLink.time>=.5)break;await new Promise(r=>setTimeout(r,50));}while(Date.now()<linkDeadline);
     await win.webContents.executeJavaScript('document.querySelector("#player").pause()');if(!deepLink.open||!deepLink.title.includes('Teste de link')||deepLink.time<.5||deepLink.time>1.2)throw Error('O link do PDF não abriu no tempo correto.');
+    await win.webContents.executeJavaScript('document.querySelector("#fullscreen-player").click()',true);
+    let fullscreen;const fullscreenDeadline=Date.now()+6000;do{fullscreen=await win.webContents.executeJavaScript('({element:document.fullscreenElement?.id,enabled:document.fullscreenEnabled})');if(fullscreen.element==='player'&&win.isFullScreen())break;await new Promise(r=>setTimeout(r,50));}while(Date.now()<fullscreenDeadline);
+    if(fullscreen.element!=='player'||!win.isFullScreen())throw Error('A tela cheia do vídeo não foi ativada: '+JSON.stringify(fullscreen));fullscreen.window=true;
+    await win.webContents.executeJavaScript('document.exitFullscreen()');const exitFullscreenDeadline=Date.now()+4000;while(win.isFullScreen()&&Date.now()<exitFullscreenDeadline)await new Promise(r=>setTimeout(r,50));fullscreen.exited=!win.isFullScreen();if(!fullscreen.exited)throw Error('A janela não retornou da tela cheia.');
     const summary=backend.state.exports.find(e=>e.id==='export-smoke');await require('../summary-document.cjs').exportSummaryDocuments(summary,{renderPdf:require('./summary-pdf.cjs').renderPdf});const pdf=fs.readFileSync(summary.topicSummary.pdf);if(!pdf.includes(Buffer.from(target))||!pdf.includes(Buffer.from('/Subtype /Link')))throw Error('O PDF não contém o link de navegação.');
     await win.webContents.executeJavaScript('document.querySelector("#preview-dialog").close()');
     backend.state.jobs=backend.state.jobs.filter(j=>j.id!=='smoke-media');
-    const report={playback,deepLink,pdfLinks:true,version:app.getVersion(),packaged:app.isPackaged,electron:process.versions.electron,ownWindow:win instanceof BrowserWindow,storageOutsideInstall:!dataDir.startsWith(process.resourcesPath),...dom};
+    const report={playback,deepLink,fullscreen,pdfLinks:true,version:app.getVersion(),packaged:app.isPackaged,electron:process.versions.electron,ownWindow:win instanceof BrowserWindow,storageOutsideInstall:!dataDir.startsWith(process.resourcesPath),...dom};
     if(dom.node!=='undefined'||!dom.apiReady||!dom.folderValue||!dom.queue||!dom.urlInput||!dom.dubbing||!dom.calibration)throw Error('A interface não ficou pronta: '+JSON.stringify(report));
     fs.writeFileSync(path.join(dataDir,'desktop-smoke.json'),JSON.stringify(report,null,2));
     fs.writeFileSync(path.join(dataDir,'desktop-smoke.png'),(await win.webContents.capturePage()).toPNG());

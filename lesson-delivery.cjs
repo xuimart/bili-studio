@@ -8,7 +8,7 @@ function playback(item,state={}){
  if(item.status!=='done'||!item.output)return{playbackReady:false,playbackLabel:'Aguardando download'};
  if(item.media?.audioVerified===false)return{playbackReady:false,playbackLabel:'Conferindo áudio…'};
  if(changing)return{playbackReady:false,playbackLabel:item.dubbingStatus==='running'?'Dublando…':'Preparando legenda…'};
- if(p&&['error','paused'].includes(p.status))return{playbackReady:true,playbackLabel:'Assistir versão disponível',playbackNotice:'O processamento desta aula precisa ser retomado. Você está abrindo a versão preservada.'};
+ if(p&&['error','paused'].includes(p.status)){if(p.dubbing)return{playbackReady:true,playbackLabel:item.dubbing?.status==='done'?'Assistir dublagem anterior':'Assistir original · dublagem pendente',playbackNotice:item.dubbing?.status==='done'?'A nova dublagem não foi concluída. Você está ouvindo a dublagem anterior.':'A dublagem não foi concluída. Este vídeo ainda está com o áudio original.'};return{playbackReady:true,playbackLabel:'Assistir versão disponível',playbackNotice:'O processamento desta aula precisa ser retomado. Você está abrindo a versão preservada.'};}
  if(p&&p.status!=='done')return{playbackReady:false,playbackLabel:p.dubbing?'Aguardando legenda e dublagem':'Aguardando legenda'};
  if(item.dubbingStatus==='done'&&item.dubbing?.status==='done')return{playbackReady:true,playbackLabel:'Assistir dublado'};
  const subtitles=require('./subtitle-delivery.cjs').subtitleDelivery(item,state);
