@@ -1,5 +1,11 @@
 # Histórico
 
+## 4.2.1 — 2026-11-12
+
+- Corrige quebras como “por / meio do design”: a geração conserva frases e expressões completas, com divisões por pontuação e limites seguros.
+- Usa ritmo natural, sem obrigar a voz a preencher um intervalo maior. Remove apenas silêncio excedente e permite compressão de até 25%, preservando o tom e recusando cortes de palavras.
+- Mantém os pontos de entrada e o tempo total do vídeo; intervalos restantes ficam depois da frase completa. Invalida checkpoints e medições do motor anterior, sem baixar os modelos novamente.
+
 ## 4.2.0 — 2026-11-12
 
 - Dublagem local em português com motor independente, vozes sintéticas e tradução preparada quando necessária.

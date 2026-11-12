@@ -52,6 +52,8 @@ O smoke test usa um perfil vazio em `data/desktop-smoke-*`, grava relatório e c
 
 Testes sintéticos verificam o pipeline local. Reconhecer um padrão de URL com fixtures não comprova acesso a todo conteúdo real daquele tipo. Registre separadamente falhas da plataforma.
 
+Com o ambiente opcional de dublagem preparado, execute `test/dubbing_audio_test.py` usando o Python desse ambiente (`components/dubbing/venv/Scripts/python.exe` no perfil). São cinco testes de processamento de pausas, sem carregar modelo nem usar GPU. A suíte Node não baixa componentes de voz na CI. Síntese e qualidade linguística exigem também amostras reais separadas; a suíte de energia não comprova pronúncia ou sincronização semântica.
+
 ## Contribuir
 
 Crie branches `codex/<assunto>` e abra PRs. Altere versões e documentação junto com o comportamento. Nunca adicione `data/`, `downloads/`, `bin/`, cookies, `.env`, chaves, tokens ou capturas da biblioteca pessoal. Use fixtures públicas ou seus próprios vídeos autorizados.

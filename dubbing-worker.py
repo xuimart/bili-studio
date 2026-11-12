@@ -1,5 +1,5 @@
 """Local TTS worker. Original Bili Studio code; uses the public OmniVoice API."""
-import os,sys,json,time,pathlib,hashlib,wave,platform
+import os,sys,json,time,pathlib,hashlib,wave,platform,subprocess
 request=json.loads(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))
 if os.environ.get('BILI_TEST_TTS_PROJECT'):sys.path.insert(0,os.environ['BILI_TEST_TTS_PROJECT'])
 os.environ['HF_HOME']=request['cache'];os.environ['HF_HUB_CACHE']=request['cache'];os.environ['TOKENIZERS_PARALLELISM']='false'
@@ -40,32 +40,57 @@ work=pathlib.Path(request['work']);work.mkdir(parents=True,exist_ok=True);sr=mod
 voice=request.get('voice','male');anchor=pathlib.Path(request.get('anchor',str(work.parent/('voice-'+voice+'.wav'))))
 anchor_text='Vamos observar a construção deste personagem. Primeiro, simplificamos as formas. Depois, ajustamos as proporções e refinamos os detalhes.'
 def array(audio):return (audio.detach().cpu().float().numpy() if hasattr(audio,'detach') else np.asarray(audio)).reshape(-1).astype(np.float32)
+def clean_pauses(audio,sr):
+    """Trim quiet edges and only the excess of long synthetic internal gaps."""
+    frame=max(1,round(sr*.02));rms=np.array([np.sqrt(np.mean(audio[i:i+frame]**2)) for i in range(0,len(audio),frame)])
+    threshold=min(.003,max(.0001,float(np.max(np.abs(audio)))*.006));active=np.flatnonzero(rms>=threshold)
+    if not len(active):raise RuntimeError('O motor gerou uma fala silenciosa.')
+    first=max(0,int(active[0])*frame-round(sr*.06));last=min(len(audio),(int(active[-1])+1)*frame+round(sr*.08));edges=len(audio)-(last-first);audio=audio[first:last]
+    rms=np.array([np.sqrt(np.mean(audio[i:i+frame]**2)) for i in range(0,len(audio),frame)]);ranges=[];start=None
+    for i,quiet in enumerate(np.append(rms<threshold,False)):
+        if quiet and start is None:start=i
+        if not quiet and start is not None:
+            if start>0 and i<len(rms) and (i-start)*frame>=sr*.9:ranges.append((start*frame+round(sr*.2),i*frame-round(sr*.2)))
+            start=None
+    pieces=[];position=0;removed=0
+    for start,end in ranges:pieces.append(audio[position:start]);position=end;removed+=end-start
+    pieces.append(audio[position:]);return np.concatenate(pieces),{'edgesSeconds':edges/sr,'internalSeconds':removed/sr,'internalGaps':len(ranges)}
 if not anchor.exists():
     emit(phase='Preparando voz sintética em português',progress=0)
     generated=model.generate(text=anchor_text,language='Portuguese',instruct=voice+', middle-aged, moderate pitch',num_step=32,speed=1.0)[0];sf.write(str(anchor),array(generated),sr,subtype='PCM_16')
-prompt=model.create_voice_clone_prompt(ref_audio=str(anchor),ref_text=anchor_text)
+prompt=model.create_voice_clone_prompt(ref_audio=str(anchor),ref_text=anchor_text);anchor_hash=hashlib.sha256(anchor.read_bytes()).hexdigest()
 load_seconds=time.monotonic()-begin;hardware=device+':'+(torch.cuda.get_device_name(0) if device=='cuda' else platform.processor())
 segments=request['segments'];results=[];total=sum(s['end']-s['start'] for s in segments);complete=0;synthesis_seconds=0;measured_speech=0
 for index,segment in enumerate(segments):
-    duration=segment['end']-segment['start'];expected=round(segment['end']*sr)-round(segment['start']*sr);key=hashlib.sha256(json.dumps([request['engine'],segment['text'],duration,expected,voice,request['modelRevision']],ensure_ascii=False).encode()).hexdigest()[:20];output=work/(key+'.wav');cached=output.exists() and request.get('mode')!='benchmark'
+    duration=segment['end']-segment['start'];expected=round(segment['end']*sr)-round(segment['start']*sr);key=hashlib.sha256(json.dumps([request['engine'],segment['text'],duration,expected,voice,request['modelRevision'],anchor_hash],ensure_ascii=False).encode()).hexdigest()[:20];output=work/(key+'.wav');cached=output.exists() and request.get('mode')!='benchmark'
     emit(phase=f'Gerando voz em português · {index+1} de {len(segments)}',progress=complete/total*100,completedSpeechSeconds=complete,totalSpeechSeconds=total,synthesisSeconds=synthesis_seconds,measuredSpeechSeconds=measured_speech)
-    started=time.monotonic()
-    if cached:audio,rate=sf.read(str(output),dtype='float32');assert rate==sr
+    started=time.monotonic();tempo=1.0;adjustments={}
+    if cached:
+        audio,rate=sf.read(str(output),dtype='float32');assert rate==sr
+        try:details=json.loads(output.with_suffix('.json').read_text());tempo=details['tempo'];adjustments=details['pauseAdjustments']
+        except (OSError,ValueError,KeyError):pass
     else:
         torch.manual_seed(2026+index)
-        audio=array(model.generate(text=segment['text'],language='Portuguese',voice_clone_prompt=prompt,duration=duration,num_step=32,postprocess_output=False)[0])
-        padding=round(sr*.1)
-        if len(audio)>expected and len(audio)>padding*2 and np.max(np.abs(audio[:padding]))<.000001 and np.max(np.abs(audio[-padding:]))<.000001:audio=audio[padding:-padding]
-        if abs(len(audio)-expected)>sr*.12:
-            sf.write(str(work/'duration-review.wav'),audio,sr,subtype='PCM_16')
-            raise RuntimeError(f'O motor entregou {len(audio)/sr:.3f}s para uma fala de {duration:.3f}s. O trecho foi preservado para revisão.')
-        audio=np.pad(audio,(0,max(0,expected-len(audio))))[:expected]
+        audio=array(model.generate(text=segment['text'],language='Portuguese',voice_clone_prompt=prompt,speed=1.0,num_step=32,postprocess_output=False)[0])
         if not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('O motor gerou uma fala silenciosa ou inválida.')
+        audio,adjustments=clean_pauses(audio,sr)
+        if len(audio)>expected:
+            ratio=len(audio)/expected
+            if ratio>1.25:
+                sf.write(str(work/'duration-review.wav'),audio,sr,subtype='PCM_16')
+                raise RuntimeError(f'A fala em {segment["start"]:.2f}s precisa de {len(audio)/sr:.2f}s naturais, mas tem {duration:.2f}s. Revise o tempo ou o texto; não cortamos palavras nem aceleramos mais de 25%.')
+            if not request.get('ffmpeg'):raise RuntimeError('FFmpeg não está disponível para encaixar a fala.')
+            tempo=min(1.25,ratio*1.02);natural=work/'natural.tmp.wav';fitted=work/'fitted.tmp.wav';sf.write(str(natural),audio,sr,subtype='PCM_16')
+            subprocess.run([request['ffmpeg'],'-v','error','-y','-i',str(natural),'-af',f'atempo={tempo:.8f}','-ar',str(sr),'-ac','1',str(fitted)],check=True,capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+            audio,rate=sf.read(str(fitted),dtype='float32');assert rate==sr
+            if len(audio)>expected:raise RuntimeError('A fala excedeu o intervalo após o ajuste; original preservado.')
         ramp=min(round(sr*.01),len(audio)//2);audio[:ramp]*=np.linspace(0,1,ramp);audio[-ramp:]*=np.linspace(1,0,ramp)
         rms=float(np.sqrt(np.mean(audio*audio)));audio*=min(.07943/max(rms,.0001),.88/max(float(np.max(np.abs(audio))),.0001));sf.write(str(output)+'.tmp.wav',audio,sr,subtype='PCM_16');os.replace(str(output)+'.tmp.wav',output)
+        output.with_suffix('.json').write_text(json.dumps({'tempo':tempo,'pauseAdjustments':adjustments}),encoding='utf8')
+    if len(audio)>expected or not np.isfinite(audio).all() or np.sqrt(np.mean(audio*audio))<.0001:raise RuntimeError('Fala inválida no checkpoint; original preservado.')
     elapsed=time.monotonic()-started
     if not cached:synthesis_seconds+=elapsed;measured_speech+=duration
-    complete+=duration;results.append({**segment,'file':str(output),'actualDuration':len(audio)/sr,'synthesisSeconds':elapsed,'cached':cached})
+    complete+=duration;results.append({**segment,'file':str(output),'actualDuration':len(audio)/sr,'actualEnd':segment['start']+len(audio)/sr,'tempo':tempo,'pauseAdjustments':adjustments,'synthesisSeconds':elapsed,'cached':cached})
     (work/'checkpoint.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
 timeline=work/'voice.wav';position=0;zeros=b'\0'*sr*2
 with wave.open(str(timeline)+'.tmp','wb') as stream:
