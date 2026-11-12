@@ -15,3 +15,9 @@ test('fila conserva a opção de dublagem e prepara português mesmo se a legend
  const {app,request,dir}=await fixture(t);app.state.folder=dir;
  const response=await request('/api/queue/add',{urls:['https://www.bilibili.com/video/BV17GsezzEyi/'],folder:dir,processing:{dubbing:true,voice:'female',subtitles:false,subtitleLanguage:'original'}});assert.equal(response.status,200);const processing=app.state.linkQueue[0].processing;assert.equal(processing.dubbing,true);assert.equal(processing.voice,'female');assert.equal(processing.subtitles,true);assert.equal(processing.subtitleLanguage,'pt');
 });
+
+test('dublagem não sintetiza pontos que a revisão marcou como incertos',async t=>{
+ let calls=0;const {app,request,dir}=await fixture(t,{dubMedia:async()=>{calls++;}}),output=path.join(dir,'a.mp4');fs.writeFileSync(output,'original');
+ app.state.exports.push({id:'needs-review',status:'done',output,sourceIds:[],subtitles:{language:'pt',srt:'legenda',review:{unresolved:[{id:1,reason:'Termo pouco claro.'}]}}});
+ assert.equal((await request('/api/dubbing',{ids:['needs-review'],voice:'male'})).status,200);const end=Date.now()+1000;while(app.state.operation.status==='running'&&Date.now()<end)await new Promise(r=>setTimeout(r,10));assert.equal(app.state.operation.status,'error');assert.match(app.state.operation.error,/trechos incertos/);assert.equal(calls,0);assert.equal(fs.readFileSync(output,'utf8'),'original');
+});

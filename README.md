@@ -27,6 +27,7 @@ Não precisa instalar Node.js, Python, FFmpeg ou Ollama manualmente. As ferramen
 - União na ordem selecionada, com capítulos e episódios individuais preservados.
 - MP4 unido e SRT com o nome da playlist; episódios separados e arquivos de apoio organizados em subpastas.
 - Legendas SRT/VTT, detecção de idioma e tradução local para PT-BR.
+- Revisão opcional com título, falas vizinhas e termos da aula; relatório rastreável e edição de trechos antes de dublar.
 - Dublagem local opcional em português, com teste de velocidade no computador, estimativa de tempo e original preservado.
 - Escolha entre **Aula por aula** e **Uma aula completa**. No modo separado, conclui legenda/dublagem de cada aula e libera **Assistir** enquanto prepara as próximas.
 - Sumário automático por assuntos depois da união e da legenda, com tempos clicáveis e cópia Markdown em Arquivos de apoio.

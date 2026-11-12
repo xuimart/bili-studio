@@ -1,5 +1,13 @@
 # Histórico
 
+## 4.4.0 — 2026-11-12
+
+- Acrescenta revisão da tradução com título, falas vizinhas e assunto/termos opcionais, antes da dublagem.
+- Traduz continuações em conjunto e oferece sugestões pontuais de uma segunda conferência; registra leituras prováveis de homófonos sem alterar a transcrição original.
+- Adiciona relatório e edição por trecho com horário clicável, confirmação de dúvidas e controle de alterações concorrentes.
+- Sinaliza trechos incertos e impede sintetizá-los automaticamente. Legenda revisada identifica áudio anterior até refazer a voz.
+- Cache contextual separado, retomada por bloco e invalidação por assunto/versão/modelo/fonte. Preserva vídeos, transcrições e versões anteriores.
+
 ## 4.3.2 — 2026-11-12
 
 - Corrige falas curtas que falhavam mesmo havendo espaço livre: o encaixe usa a duração realmente gerada e até um segundo de espaço livre por borda, sem sobreposição.

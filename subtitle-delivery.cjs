@@ -6,7 +6,8 @@ function subtitleDelivery(item,state={}){
  const phase=item.subtitleDelivery?.status||(current?state.operation?.status:null),actual=item.subtitles;
  if(requested==='pt'&&actual?.language!=='pt')return {ready:false,requestedLanguage:'pt',status:phase==='error'?'error':'pending',notice:phase==='error'?'A tradução para português falhou. Retome o processamento; a transcrição original foi preservada.':'A legenda em português ainda está sendo preparada.'};
  if(!actual?.srt)return {ready:false,requestedLanguage:requested,status:phase||'none',notice:'Ainda não há legenda disponível para este vídeo.'};
- return {ready:true,requestedLanguage:requested,status:'ready',notice:actual.language==='pt'?'Legenda em português.':'Legenda no idioma original · '+(actual.language==='zh'?'mandarim':actual.language||'detectado')+'.'};
+ const review=actual.review,notice=review?(review.unresolved?.length?review.unresolved.length+' trechos incertos marcados na legenda. Confira o relatório antes de dublar.':'Tradução com revisão automática de contexto e termos. Nomes e inferências ainda precisam de conferência humana.'):'Legenda em português.';
+ return {ready:true,requestedLanguage:requested,status:'ready',notice:actual.language==='pt'?notice:'Legenda no idioma original · '+(actual.language==='zh'?'mandarim':actual.language||'detectado')+'.'};
 }
 function applySubtitleRepairs(state,dataDir){
  if(state.busy||state.auditing||state.queueEnabled||state.operation?.status==='running')return 0;

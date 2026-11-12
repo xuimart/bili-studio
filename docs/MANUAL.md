@@ -95,6 +95,16 @@ Para trazer os dados da antiga versão que abria no Edge: **Arquivo → Importar
 
 ## Problemas comuns
 
+### Tradução desconexa e revisão de contexto
+
+Em **Legenda automática → Revisão de contexto e termos**, deixe a revisão ligada (padrão). O título da aula é usado automaticamente. Você pode informar assunto e vocabulário em até 600 caracteres, por exemplo: “desenho de anatomia; caixa torácica, pelve, volumes geométricos”. Isso orienta a tradução; não substitui a fala original.
+
+A revisão junta continuações curtas em unidades de tradução e usa termos das falas vizinhas para orientar o sentido. Uma segunda passagem compara a tradução com a fonte e sugere ajustes pontuais para conferência. Usa preferencialmente Qwen 7B quando já instalado, com fallback ao 3B. Acrescenta tempo e memória; não baixa 7B silenciosamente. Hipóteses de homófonos no mandarim exigem contexto local e ficam registradas. Não é conferência humana nem garantia de exatidão; não analisa a imagem do professor.
+
+Para uma aula antiga, abra **Assistir → Revisar tradução com contexto**. Se quiser, ajuste o campo de assunto dessa revisão. As versões anteriores e a transcrição são preservadas. **Relatório da revisão** mostra fonte, leitura provável, rascunho, tradução final e dúvidas. **Conferir e ajustar trechos** abre a edição: clique no horário para ouvir, ajuste o português e use **Salvar e confirmar trecho**. Sugestões da segunda passagem aparecem identificadas e só entram na legenda quando você confirma; o modelo também pode sugerir alterações desnecessárias. A lista mostra ajustes/dúvidas primeiro; “Mostrar todos” permite conferir o restante.
+
+Um trecho que o revisor não consegue resolver aparece como **[Trecho incerto na transcrição]**. A dublagem automática aguarda sua conferência. Depois de confirmar os pontos, clique em **Dublar este vídeo em português**. Uma legenda revisada não muda o áudio já pronto: a interface identifica a dublagem anterior até você refazer a voz. Edição e instalação de atualização ficam bloqueadas enquanto há trabalho ativo.
+
 - **Login, região, 403, 412, 429:** confirme o acesso no Bilibili, aguarde e tente novamente. Se necessário, escolha cookies Netscape da sua própria sessão nas opções de login. Não publique esse arquivo.
 - **Sem som:** retome o episódio. O aplicativo verifica a presença da faixa de áudio; silêncio na fonte não pode ser corrigido inventando áudio.
 - **Pouca memória:** feche aplicativos pesados. A tradução é mais exigente que o download. Modelos já instalados de 7B podem consumir mais RAM que o 3B preparado automaticamente.
