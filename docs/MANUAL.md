@@ -107,6 +107,7 @@ Um trecho que o revisor não consegue resolver aparece como **[Trecho incerto na
 
 - **Login, região, 403, 412, 429:** confirme o acesso no Bilibili, aguarde e tente novamente. Se necessário, escolha cookies Netscape da sua própria sessão nas opções de login. Não publique esse arquivo.
 - **Sem som:** retome o episódio. O aplicativo verifica a presença da faixa de áudio; silêncio na fonte não pode ser corrigido inventando áudio.
+- **Uma aula falhou na voz:** no modo separado, as outras continuam. O programa tenta recuperar falas silenciosas e conserva os trechos válidos. Ao terminar, retome as pendentes; as aulas concluídas compatíveis são reaproveitadas.
 - **Pouca memória:** feche aplicativos pesados. A tradução é mais exigente que o download. Modelos já instalados de 7B podem consumir mais RAM que o 3B preparado automaticamente.
 - **Sem espaço:** libere espaço no disco dos vídeos e no disco do perfil. União e conversão usam arquivos temporários.
 - **Primeiro uso interrompido:** abra novamente. Componentes incompletos não são aceitos sem validação de integridade.

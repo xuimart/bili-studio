@@ -1,5 +1,12 @@
 # Histórico
 
+## 4.4.1 — 2026-11-12
+
+- Fala silenciosa ou inválida recebe até três tentativas com sementes diferentes, preservando o áudio válido já gerado. Checkpoint de áudio inválido é regenerado.
+- Se necessário, reagrupa falas próximas em até 36 segundos/120 palavras, sem truncar texto nem superar a aceleração de 25%.
+- Uma aula com erro no modo separado fica pendente e as seguintes continuam. A retomada reaproveita aulas concluídas e checkpoints compatíveis.
+- Libera o modelo de tradução da instância privada antes da voz, reduzindo a disputa por memória da GPU.
+
 ## 4.4.0 — 2026-11-12
 
 - Acrescenta revisão da tradução com título, falas vizinhas e assunto/termos opcionais, antes da dublagem.

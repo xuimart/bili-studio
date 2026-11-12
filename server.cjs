@@ -133,7 +133,7 @@ function createApp(options = {}) {
     if(!hasMerge&&(hasCaptions||hasDubbing))for(const item of items)if(type!=='workflow'||!lessons.reusable(item,processing,dubbing.ENGINE))item.processingDelivery={...lessons.plan(processing),status:'pending'};
     persist(true);
     void (async () => {
-      let currentCaption=null,currentLesson=null;
+      let currentCaption=null,currentLesson=null,successfulLessons=0;const failedLessons=[];
       try {
         if(type==='dubbing-calibration'){
           operation.total=1;update({phase:'Preparando teste de velocidade · primeira preparação não conta na estimativa',stage:'dubbing-calibration'});
@@ -151,10 +151,11 @@ function createApp(options = {}) {
         }
         for(let index=0;index<captionItems.length;index++){
           const item=captionItems[index];lessonIndex=index;lessonTotal=captionItems.length;currentLesson=item;
-          if(type==='workflow'&&lessons.reusable(item,processing,dubbing.ENGINE)){update({currentId:item.id,currentTitle:item.title,completed:index+1,progress:lessonProgress(lessonEnd),phase:'Aula pronta · reaproveitando o processamento concluído'});currentLesson=null;continue;}
+          try {
+          if(type==='workflow'&&lessons.reusable(item,processing,dubbing.ENGINE)){update({currentId:item.id,currentTitle:item.title,completed:++successfulLessons,progress:lessonProgress(lessonEnd),phase:'Aula pronta · reaproveitando o processamento concluído'});currentLesson=null;continue;}
           if(hasCaptions||hasDubbing){item.processingDelivery={...lessons.plan({...processing,subtitles:hasCaptions||processing.subtitles,dubbing:hasDubbing}),status:'running'};persist(true);}
           if(hasCaptions){
-            currentCaption=item;item.subtitleDelivery={requestedLanguage:processing.subtitleLanguage||'original',status:'processing'};update({ currentId: item.id, currentTitle: item.title, completed: index,stage:'transcribe',stageProgress:0,phase:'Preparando legenda · aula '+(index+1)+' de '+captionItems.length,progress:lessonProgress(captionStart*(hasDubbing?.65:hasSummary?.85:1)) });
+            currentCaption=item;item.subtitleDelivery={requestedLanguage:processing.subtitleLanguage||'original',status:'processing'};update({ currentId: item.id, currentTitle: item.title, completed: successfulLessons,stage:'transcribe',stageProgress:0,phase:'Preparando legenda · aula '+(index+1)+' de '+captionItems.length,progress:lessonProgress(captionStart*(hasDubbing?.65:hasSummary?.85:1)) });
             const previous=item.subtitles,sourceLanguage=previous?.sourceLanguage||previous?.original?.language||previous?.language;
             const sameLanguage=language==='auto'?(previous?.original?.detectionVersion>=2||previous?.detectionVersion>=2):sourceLanguage===language;
             const reviewOptions={contextReview:processing.contextReview!==false,title:item.title,context:processing.translationContext||''};
@@ -189,12 +190,22 @@ function createApp(options = {}) {
           if(hasDubbing){
           if(item.subtitles?.review?.unresolved?.length)throw Error('A revisão encontrou '+item.subtitles.review.unresolved.length+' trechos incertos. Confira o relatório da revisão e ajuste o contexto antes de dublar. A legenda e o vídeo foram preservados.');
           const from=type==='dubbing'?0:65,to=hasSummary?90:100;item.dubbingStatus='running';item.dubbingError='';update({currentId:item.id,currentTitle:item.title,stage:'dubbing',progress:lessonProgress(from)});persist(true);
-          try{item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:lessonProgress(from+(to-from)*(p.progress||0)/100),estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
+          try{if(!options.dubMedia)await require('./translate.cjs').releaseTranslator(item.subtitles?.review?.model||/qwen2\.5:(?:3b|7b)/.exec(item.subtitles?.model||'')?.[0],{signal});item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:lessonProgress(from+(to-from)*(p.progress||0)/100),estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
           catch(error){item.dubbingStatus=signal.aborted?'paused':'error';item.dubbingError=error.message;throw error;}persist(true);
           }
-          if(hasCaptions||hasDubbing){item.processingDelivery=lessons.complete(item,{...processing,language,subtitles:hasCaptions||!!processing.subtitles||type==='dubbing'&&!!item.subtitles,subtitleLanguage:processing.subtitleLanguage||(type==='dubbing'?'pt':'original'),dubbing:hasDubbing});update({completed:index+1,progress:lessonProgress(lessonEnd),phase:'Aula '+(index+1)+' pronta para assistir'});persist(true);}
+          if(hasCaptions||hasDubbing){item.processingDelivery=lessons.complete(item,{...processing,language,subtitles:hasCaptions||!!processing.subtitles||type==='dubbing'&&!!item.subtitles,subtitleLanguage:processing.subtitleLanguage||(type==='dubbing'?'pt':'original'),dubbing:hasDubbing});update({completed:++successfulLessons,progress:lessonProgress(lessonEnd),phase:'Aula '+(index+1)+' pronta para assistir'});persist(true);}
           currentLesson=null;
+          }catch(error){
+            if(type!=='workflow'||processing.merge||signal.aborted)throw error;
+            if(item.processingDelivery)Object.assign(item.processingDelivery,{status:'error',error:error.message});
+            if(currentCaption)currentCaption.subtitleDelivery={...currentCaption.subtitleDelivery,status:'error',error:error.message};
+            if(hasDubbing){item.dubbingStatus='error';item.dubbingError=error.message;}
+            failedLessons.push({id:item.id,error:error.message});currentCaption=null;currentLesson=null;
+            update({completed:successfulLessons,failedIds:failedLessons.map(e=>e.id),phase:'Aula '+(index+1)+' com pendência. Seguindo para a próxima.'});
+            log('Aula '+(index+1)+' pendente: '+error.message,'warning');persist(true);
+          }
         }
+        if(failedLessons.length){update({completed:successfulLessons,failedIds:failedLessons.map(e=>e.id),currentId:failedLessons[0].id,completedAt:new Date().toISOString()});throw Error(successfulLessons+' de '+captionItems.length+' aulas prontas; '+failedLessons.length+' com pendências. As demais aulas foram processadas. Retome para tentar as pendentes.');}
         if(hasSummary)for(const item of captionItems.filter(i=>i.type==='merged')){
           item.topicSummaryStatus='running';item.topicSummaryError='';update({currentId:item.id,currentTitle:item.title});persist(true);
           try{item.topicSummary=await(options.generateSummary||generateSummary)(item,{signal,update:stageUpdate('summary',type==='summary'?0:hasDubbing?90:85,100)});item.topicSummaryStatus='done';

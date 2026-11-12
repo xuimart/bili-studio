@@ -159,4 +159,9 @@ async function translateCaptions(original, {signal, update=()=>{}, generate, out
   for(const [ext,text]of Object.entries({srt:formatted.srt,vtt:formatted.vtt,txt:translated.map(c=>c.text).join('\n')})){outputs[ext]=base+'.'+ext;captions.write(outputs[ext],text);}
   return {...outputs,alignedSrt,displayAlignedSrt,readability:{...formatted.report,mapping},...(review?{review}:{}),language:'pt',sourceLanguage:original.language,model:original.model+' + '+model,original,translated:true,createdAt:new Date().toISOString()};
 }
-module.exports={parseSrt,validateTranslations,translateCaptions,ensureTranslator,findOllamaExecutable,translateWithOllama,parseModelJSON};
+async function releaseTranslator(model,{signal,request=localRequest}={}){
+  if(!['qwen2.5:3b','qwen2.5:7b'].includes(model))return false;
+  try{const response=await request(ENDPOINT+'/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.any([signal||new AbortController().signal,AbortSignal.timeout(5000)]),body:JSON.stringify({model,keep_alive:0,stream:false})});return response.ok;}
+  catch(error){if(signal?.aborted)throw error;return false;}
+}
+module.exports={parseSrt,validateTranslations,translateCaptions,ensureTranslator,findOllamaExecutable,translateWithOllama,parseModelJSON,releaseTranslator};

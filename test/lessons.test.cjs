@@ -10,7 +10,7 @@ test('reaproveitamento por aula é invalidado por legenda, vídeo, voz ou motor 
 async function until(check){const end=Date.now()+5000;while(!check()&&Date.now()<end)await new Promise(r=>setTimeout(r,10));assert.ok(check(),'A operação não atingiu o estado esperado.');}
 async function fixture(t,hooks={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'bili-lessons-')),steps=[];
- const library=makeLibrary({bvid:'BV17GsezzEyi',title:'Aulas de teste',pages:[1,2].map(p=>({page:p,part:'Aula '+p,duration:2}))},'https://www.bilibili.com/video/BV17GsezzEyi/');
+ const library=makeLibrary({bvid:'BV17GsezzEyi',title:'Aulas de teste',pages:Array.from({length:hooks.count||2},(_,i)=>i+1).map(p=>({page:p,part:'Aula '+p,duration:2}))},'https://www.bilibili.com/video/BV17GsezzEyi/');
  const target=path.join(dir,safeName(library.title,40)+' ['+safeName(library.id)+']');fs.mkdirSync(target,{recursive:true});
  const app=createApp({dataDir:path.join(dir,'profile'),token:'lesson-token',inspectMedia:async()=>({audioVerified:true,audioSignal:true}),
  transcribeMedia:async(item,_language,{signal})=>{steps.push('caption:'+item.index);await hooks.caption?.(item,signal);signal.throwIfAborted();const srt=path.join(dir,item.id.replaceAll(':','_')+'.original.srt');fs.writeFileSync(srt,'1\n00:00:00,000 --> 00:00:02,000\nObserve the shapes.\n');return{id:item.id,language:'en',srt,detectionVersion:2};},
@@ -42,4 +42,10 @@ test('cancelamento mantém a primeira aula pronta para assistir',async t=>{
 });
 test('modo aula completa une primeiro e legenda e dubla somente o resultado',async t=>{
  const f=await fixture(t);await f.start(true);await until(()=>f.app.state.workflow.status==='done');assert.deepEqual(f.steps.filter(s=>s==='merge'||/caption|dub/.test(s)),['merge','caption:99','dub:99']);assert.equal(f.app.state.exports.length,1);assert.ok(f.app.state.jobs.every(j=>!j.dubbing));const state=await(await f.request('/api/state')).json();assert.equal(state.exports[0].playbackLabel,'Assistir dublado');
+});
+
+test('uma aula com erro não bloqueia a próxima e a retomada só refaz a pendente',async t=>{
+ let fail=true;const f=await fixture(t,{count:3,dub:async item=>{if(item.index===2&&fail)throw Error('Fala inválida de teste');}});await f.start();await until(()=>f.app.state.operation.status==='error');
+ assert.deepEqual(f.app.state.jobs.map(j=>j.processingDelivery.status),['done','error','done']);assert.equal(f.app.state.operation.completed,2);assert.deepEqual(f.app.state.operation.failedIds,[f.app.state.jobs[1].id]);assert.equal(f.steps.filter(s=>s==='dub:3').length,1);
+ fail=false;await f.start();await until(()=>f.app.state.workflow.status==='done');assert.equal(f.steps.filter(s=>s==='dub:1').length,1);assert.equal(f.steps.filter(s=>s==='dub:3').length,1);assert.equal(f.steps.filter(s=>s==='dub:2').length,2);assert.equal(f.app.state.operation.completed,3);
 });

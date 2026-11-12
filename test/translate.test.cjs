@@ -95,3 +95,10 @@ test('checkpoint chinês é invalidado a partir do primeiro trecho incorreto',as
  const result=await translateCaptions({srt,language:'zh',model:'Whisper'},{outputBase:path.join(dir,'output'),generate:async(_p,b)=>{calls.push(b[0].id);return{translations:[{...b[0],text:'Desenhar.'}]};}});
  assert.deepEqual(calls,[2]);assert.deepEqual(parseSrt(fs.readFileSync(result.srt,'utf8')).map(c=>c.text),['Olá.','Desenhar.']);
 });
+
+test('libera apenas o modelo conhecido na instância privada antes da voz e respeita cancelamento',async()=>{
+ const {releaseTranslator}=require('../translate.cjs');let calls=0;
+ const request=async(url,options)=>{calls++;assert.equal(url,'http://127.0.0.1:11435/api/generate');assert.deepEqual(JSON.parse(options.body),{model:'qwen2.5:7b',keep_alive:0,stream:false});return Response.json({done:true});};
+ assert.equal(await releaseTranslator('outro-modelo',{request}),false);assert.equal(calls,0);assert.equal(await releaseTranslator('qwen2.5:7b',{request}),true);assert.equal(calls,1);
+ const controller=new AbortController();controller.abort();await assert.rejects(releaseTranslator('qwen2.5:7b',{signal:controller.signal,request:async(_u,o)=>{o.signal.throwIfAborted();}}));
+});
