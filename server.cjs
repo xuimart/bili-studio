@@ -126,7 +126,7 @@ function createApp(options = {}) {
     const hasDubbing=type==='dubbing'||type==='workflow'&&processing.dubbing;
     const lessonEnd=hasSummary?(hasDubbing?90:85):100;
     const mergeEnd = hasCaptions ? 60 : 100;
-    const captionStart = hasMerge ? mergeEnd : 0, captionEnd = hasTranslation ? 80 : 100;
+    const captionStart = hasMerge ? mergeEnd : 0,captionLimit=hasDubbing?65:hasSummary?85:100,captionEnd=hasTranslation?captionStart+(captionLimit-captionStart)*.45:captionLimit;
     let lessonIndex=0,lessonTotal=hasMerge?1:Math.max(1,items.length);
     const lessonProgress=value=>(lessonIndex+value/100)/lessonTotal*100;
     const stageUpdate = (stage, from, to) => p => update({...p, stage, stageProgress:p.progress||0,progress:stage==='merge'||stage==='summary'?(from+(to-from)*(p.progress||0)/100)*(stage==='merge'?(hasDubbing?.65:hasSummary?.85:1):1):lessonProgress((from+(to-from)*(p.progress||0)/100)*(hasDubbing?.65:hasSummary?.85:1))});
@@ -157,7 +157,8 @@ function createApp(options = {}) {
             currentCaption=item;item.subtitleDelivery={requestedLanguage:processing.subtitleLanguage||'original',status:'processing'};update({ currentId: item.id, currentTitle: item.title, completed: index,stage:'transcribe',stageProgress:0,phase:'Preparando legenda · aula '+(index+1)+' de '+captionItems.length,progress:lessonProgress(captionStart*(hasDubbing?.65:hasSummary?.85:1)) });
             const previous=item.subtitles,sourceLanguage=previous?.sourceLanguage||previous?.original?.language||previous?.language;
             const sameLanguage=language==='auto'?(previous?.original?.detectionVersion>=2||previous?.detectionVersion>=2):sourceLanguage===language;
-            const reusePortuguese=processing.subtitleLanguage==='pt'&&previous?.language==='pt'&&sameLanguage&&['srt','vtt'].every(key=>previous[key]&&fs.existsSync(previous[key]));
+            const reviewOptions={contextReview:processing.contextReview!==false,title:item.title,context:processing.translationContext||''};
+            const reusePortuguese=processing.subtitleLanguage==='pt'&&previous?.language==='pt'&&sameLanguage&&require('./context-review.cjs').compatible(previous,reviewOptions)&&['srt','vtt'].every(key=>previous[key]&&fs.existsSync(previous[key]));
             if(!reusePortuguese){
             const existing = item.subtitleSource || item.subtitles?.original || item.subtitles;
             let reusable = existing?.srt && fs.existsSync(existing.srt) && (language==='auto'||existing.language===language);
@@ -172,7 +173,9 @@ function createApp(options = {}) {
             const original = reusable ? existing : await (options.transcribeMedia || media.transcribe)(item, language, { signal, update:stageUpdate('transcribe',captionStart,captionEnd) });
             item.subtitleSource=original;persist(true);
             if (processing.subtitleLanguage === 'pt' && original.language !== 'pt') {
-              item.subtitles = await (options.translateCaptions || translateCaptions)(original, { signal,outputBase:captionBase(item),update:stageUpdate('translate',captionEnd,100) });
+              if(previous?.language==='pt'&&reusable)(item.subtitleHistory||=[]).push(previous);
+              item.subtitles = await (options.translateCaptions || translateCaptions)(original, { signal,outputBase:captionBase(item),...reviewOptions,update:stageUpdate('translate',captionEnd,captionLimit) });
+              if(item.dubbing?.status==='done'){item.dubbingStatus='outdated';item.dubbingError='A legenda foi revisada. Refaça a dublagem para atualizar a voz.';}
             }else item.subtitles=original;
             }
             if(item.subtitles?.srt && !options.transcribeMedia){
@@ -184,6 +187,7 @@ function createApp(options = {}) {
           }
           currentCaption=null;
           if(hasDubbing){
+          if(item.subtitles?.review?.unresolved?.length)throw Error('A revisão encontrou '+item.subtitles.review.unresolved.length+' trechos incertos. Confira o relatório da revisão e ajuste o contexto antes de dublar. A legenda e o vídeo foram preservados.');
           const from=type==='dubbing'?0:65,to=hasSummary?90:100;item.dubbingStatus='running';item.dubbingError='';update({currentId:item.id,currentTitle:item.title,stage:'dubbing',progress:lessonProgress(from)});persist(true);
           try{item.dubbing=await(options.dubMedia||dubbing.dub)(item,{signal,voice:processing.voice||'male',update:p=>{const remaining=p.measuredSpeechSeconds>0&&p.synthesisSeconds>0?p.synthesisSeconds/p.measuredSpeechSeconds*(p.totalSpeechSeconds-p.completedSpeechSeconds):null;update({...p,stageProgress:p.progress||0,progress:lessonProgress(from+(to-from)*(p.progress||0)/100),estimatedRemainingSeconds:remaining});}});if(item.dubbing.media)item.media=item.dubbing.media;item.dubbingStatus='done';}
           catch(error){item.dubbingStatus=signal.aborted?'paused':'error';item.dubbingError=error.message;throw error;}persist(true);
@@ -319,7 +323,8 @@ function createApp(options = {}) {
     persist(true);
   }
   function processingOptions(body) {
-    const p = { merge:false, subtitles:false, summary:true,dubbing:false,voice:'male',language:'auto', subtitleLanguage:'original', ...body.processing };
+    const p = { merge:false, subtitles:false, summary:true,dubbing:false,voice:'male',language:'auto', subtitleLanguage:'original',contextReview:true,translationContext:'', ...body.processing };
+    if(typeof p.contextReview!=='boolean'||typeof p.translationContext!=='string'||p.translationContext.length>600)throw Error('Contexto da tradução inválido (máximo de 600 caracteres).');p.translationContext=p.translationContext.trim();
     if(typeof p.dubbing!=='boolean')throw Error('Opção de dublagem inválida.');dubbing.voice(p.voice);if(p.dubbing){p.subtitles=true;p.subtitleLanguage='pt';}
     if(typeof p.summary!=='boolean')throw Error('Opção de sumário inválida.');
     if (typeof p.merge !== 'boolean' || typeof p.subtitles !== 'boolean' || !['auto','en','pt','zh','es','fr','ja','de','it','ko'].includes(p.language) || !['original','pt'].includes(p.subtitleLanguage)) throw new Error('Opções de processamento inválidas.');
@@ -437,10 +442,11 @@ function createApp(options = {}) {
     }
     if (!req.headers.cookie?.split(';').some(p => p.trim() === `bilibili_session=${token}`)) return send(401, { error: 'Abra o Bili Studio pelo atalho do aplicativo.' });
     if (req.method === 'GET' && url.pathname === '/api/state') return send(200, publicState());
-    if (['GET', 'HEAD'].includes(req.method) && ['/api/media', '/api/thumbnail', '/api/subtitle','/api/summary'].includes(url.pathname)) {
+    if (['GET', 'HEAD'].includes(req.method) && ['/api/media', '/api/thumbnail', '/api/subtitle','/api/summary','/api/translation-review'].includes(url.pathname)) {
       const item = [...state.jobs, ...state.exports].findLast(j => j.id === url.searchParams.get('id'));
       if (!item || item.status !== 'done') return send(404, { error: 'Vídeo ainda não disponível.' });
       let file, mime;
+      if(url.pathname==='/api/translation-review'){file=item.subtitles?.review?.report;mime='application/json; charset=utf-8';}
       if(url.pathname==='/api/summary'){
         const format=url.searchParams.get('format')||'markdown',types={markdown:'text/markdown; charset=utf-8',html:'text/html; charset=utf-8',pdf:'application/pdf'};
         if(!types[format])return send(400,{error:'Formato de sumário inválido.'});
@@ -501,10 +507,21 @@ function createApp(options = {}) {
           startDownload(state.library,body);
         } else if (url.pathname === '/api/merge') {
           const items = selectedFinished(body.ids); if (items.length < 2) throw new Error('Selecione pelo menos dois episódios para juntar.'); startOperation('merge', items);
+        } else if(url.pathname==='/api/translation-review'){
+          if(state.busy||pumping||state.queueEnabled||state.auditing)throw Error('Aguarde a fila e a verificação terminarem antes de editar a legenda.');
+          const item=selectedFinished([body.id],true)[0],previous=item.subtitles;
+          const revised=require('./context-review.cjs').applyEdits(previous,body);
+          const alias=item.output.replace(/\.mp4$/i,'')+'.srt';require('./captions.cjs').write(alias,fs.readFileSync(revised.srt,'utf8'));revised.playbackSrt=alias;
+          (item.subtitleHistory||=[]).push(previous);item.subtitles=revised;item.subtitleDelivery={requestedLanguage:'pt',status:'done'};
+          if(item.dubbing?.status==='done'){item.dubbingStatus='outdated';item.dubbingError='A legenda foi revisada. Refaça a dublagem para atualizar a voz.';}
+          if(item.processingDelivery)item.processingDelivery.status='paused';
+          if(item.topicSummary){item.topicSummaryStatus='outdated';item.topicSummaryError='A legenda foi alterada. Atualize o sumário para acompanhar a revisão.';}
+          persist(true);
         } else if (url.pathname === '/api/subtitles') {
           const language = body.language || 'auto'; if (!['auto', 'pt', 'en', 'zh', 'es', 'fr', 'ja', 'de', 'it', 'ko'].includes(language)) throw new Error('Idioma não suportado.');
           const target=body.subtitleLanguage||'original';if(!['pt','original'].includes(target))throw Error('Idioma da legenda não suportado.');
-          startOperation('subtitles', selectedFinished(body.ids, true), language,{subtitleLanguage:target});
+          const p=processingOptions({processing:{subtitles:true,subtitleLanguage:target,language,contextReview:body.contextReview??true,translationContext:body.translationContext||''}});
+          startOperation('subtitles', selectedFinished(body.ids, true), language,p);
         } else if(url.pathname==='/api/dubbing/calibrate'){
           startOperation('dubbing-calibration',[],'auto',{voice:dubbing.voice(body.voice)});
         } else if(url.pathname==='/api/dubbing'){

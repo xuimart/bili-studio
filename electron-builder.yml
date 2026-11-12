@@ -18,6 +18,7 @@ files:
   - whisper.cjs
   - speech.cjs
   - translate.cjs
+  - context-review.cjs
   - subtitle-delivery.cjs
   - lesson-delivery.cjs
   - library-files.cjs

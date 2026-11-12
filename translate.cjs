@@ -42,7 +42,7 @@ function validateTranslations(data, cues) {
     ids.add(found.id); return { ...cue, text: found.text.replace(/\s+/g, ' ').trim() };
   });
 }
-async function ensureTranslator(signal, update = () => {}, {sourceLanguage} = {}) {
+async function ensureTranslator(signal, update = () => {}, {sourceLanguage,preferQuality=false} = {}) {
   const tags = async () => { const r = await fetch(ENDPOINT + '/api/tags', { signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(3000)]) }); if (!r.ok) throw Error('Ollama indisponível.'); return r.json(); };
   let data;
   try { data = await tags(); } catch {
@@ -53,7 +53,7 @@ async function ensureTranslator(signal, update = () => {}, {sourceLanguage} = {}
     for(let i=0;i<45;i++){ if(signal?.aborted)throw Error('Operação cancelada.'); if(launchError)throw launchError; await new Promise(r=>setTimeout(r,1000)); try{data=await tags();break;}catch{} }
     if(!data) throw new Error('Não foi possível iniciar o Ollama para traduzir.');
   }
-  const names=data.models.map(m=>m.name);let model=(sourceLanguage==='zh'?['qwen2.5:3b','qwen2.5:7b']:['qwen2.5:7b','qwen2.5:3b']).find(m=>names.includes(m));
+  const names=data.models.map(m=>m.name);let model=(sourceLanguage==='zh'&&!preferQuality?['qwen2.5:3b','qwen2.5:7b']:['qwen2.5:7b','qwen2.5:3b']).find(m=>names.includes(m));
   if(!model){
     model='qwen2.5:3b';update({phase:'Baixando o modelo de tradução local · cerca de 2 GB',progress:0});
     const r=await fetch(ENDPOINT+'/api/pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,stream:true}),signal});
@@ -105,14 +105,17 @@ async function translateWithOllama(cue, {model,signal,request=localRequest,onRet
   throw Error('Não foi possível traduzir o trecho '+cue.id+' ('+cue.time+'). O progresso anterior foi salvo. '+lastError.message);
 }
 
-async function translateCaptions(original, {signal, update=()=>{}, generate, outputBase}={}) {
+async function translateCaptions(original, {signal, update=()=>{}, generate, outputBase,contextReview=!generate,title='',context='',reviewRequest}={}) {
   const cues=parseSrt(fs.readFileSync(original.srt,'utf8'));
   const base=outputBase||original.srt.replace(/\.srt$/i,'')+'.pt-BR', outputs={};
   const fingerprint=crypto.createHash('sha256').update(JSON.stringify(cues)).digest('hex');
-  const checkpointFile=base+'.progress.json',saved=loadState(checkpointFile);
-  const model=generate?'test':await ensureTranslator(signal, update, {sourceLanguage:original.language});
-  if(!generate){update({phase:'Carregando tradutor local · '+model,progress:0});const warm=await requestWithRecovery(ENDPOINT+'/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.any([signal||new AbortController().signal,AbortSignal.timeout(600000)]),body:JSON.stringify({model,stream:false,options:{num_ctx:2048},keep_alive:'30m'})},{recover:()=>recoverTranslator(signal,update)});if(!warm.ok)throw Error('Não foi possível carregar o tradutor local.');}
-  const translated=saved.fingerprint===fingerprint && Array.isArray(saved.translated) ? saved.translated : [];
+  const checkpointFile=base+(contextReview?'.context-output.progress.json':'.progress.json'),saved=loadState(checkpointFile);
+  const model=generate||reviewRequest?'test':await ensureTranslator(signal, update, {sourceLanguage:original.language,preferQuality:contextReview});
+  let review,contextual;
+  if(contextReview){contextual=await require('./context-review.cjs').reviewCaptions(cues,{base,title,context,model,signal,update,...(reviewRequest?{request:reviewRequest}:{})});review=contextual.review;}
+  if(!generate&&!contextReview){update({phase:'Carregando tradutor local · '+model,progress:0});const warm=await requestWithRecovery(ENDPOINT+'/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.any([signal||new AbortController().signal,AbortSignal.timeout(600000)]),body:JSON.stringify({model,stream:false,options:{num_ctx:2048},keep_alive:'30m'})},{recover:()=>recoverTranslator(signal,update)});if(!warm.ok)throw Error('Não foi possível carregar o tradutor local.');}
+  const translated=contextual?.translated||(saved.fingerprint===fingerprint && Array.isArray(saved.translated) ? saved.translated : []);
+  if(!contextReview){
   // Validate recovered IDs and timings before trusting a checkpoint.
   const invalid=translated.findIndex((c,i)=>c.id!==cues[i]?.id||c.time!==cues[i]?.time||typeof c.text!=='string'||!c.text.trim()||/\p{Script=Han}/u.test(c.text));if(invalid>=0)translated.length=invalid;
   update({phase:'Traduzindo legendas para português · '+translated.length+' de '+cues.length+' trechos',progress:translated.length/cues.length*100});
@@ -147,12 +150,13 @@ async function translateCaptions(original, {signal, update=()=>{}, generate, out
     }
     await Promise.all(Array.from({length:4},worker));if(failure)throw failure;
   } finally {checkpoint.persist(true);checkpoint.close();}
-  const captions=require('./captions.cjs'),formatted=await require('./caption-compact.cjs').prepareReadable(cues,translated,{signal,cacheFile:base+'.readability-cache.json',update});
+  }
+  const captions=require('./captions.cjs'),formatted=review?{...captions.formatCaptions(translated),displayAligned:translated}:await require('./caption-compact.cjs').prepareReadable(cues,translated,{signal,cacheFile:base+'.readability-cache.json',update});
   const details=path.join(path.dirname(base),'Dados da legenda');fs.mkdirSync(details,{recursive:true});
   const internalBase=path.join(details,path.basename(base)),alignedSrt=internalBase+'.aligned.srt',displayAlignedSrt=internalBase+'.display-aligned.srt',mapping=internalBase+'.readability.json';
   const alignedText=translated.map(c=>c.id+'\n'+c.time+'\n'+c.text).join('\n\n')+'\n';
   captions.write(alignedSrt,alignedText);captions.write(displayAlignedSrt,formatted.displayAligned.map(c=>c.id+'\n'+c.time+'\n'+c.text).join('\n\n')+'\n');captions.write(mapping,JSON.stringify({report:formatted.report,mapping:formatted.mapping},null,2));
   for(const [ext,text]of Object.entries({srt:formatted.srt,vtt:formatted.vtt,txt:translated.map(c=>c.text).join('\n')})){outputs[ext]=base+'.'+ext;captions.write(outputs[ext],text);}
-  return {...outputs,alignedSrt,displayAlignedSrt,readability:{...formatted.report,mapping},language:'pt',sourceLanguage:original.language,model:original.model+' + '+model,original,translated:true,createdAt:new Date().toISOString()};
+  return {...outputs,alignedSrt,displayAlignedSrt,readability:{...formatted.report,mapping},...(review?{review}:{}),language:'pt',sourceLanguage:original.language,model:original.model+' + '+model,original,translated:true,createdAt:new Date().toISOString()};
 }
 module.exports={parseSrt,validateTranslations,translateCaptions,ensureTranslator,findOllamaExecutable,translateWithOllama,parseModelJSON};
